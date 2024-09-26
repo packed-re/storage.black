@@ -38,7 +38,7 @@ function GetByteRangeMask(start, end) // end is included
 }
 
 // this is up to 8x faster than converting it to a uint8array, using its slice function, and then converting back to a wordarray,
-// and faster even still when not converting it back to a wordarray, when doing an aligned parse, and equal when doing an unaligned parse
+// and faster even still when not converting it back to a wordarray, when doing an aligned slice, and equal when doing a misaligned slice
 function SliceWordArray(wa, start, end) // end is not included
 {
 	if(end === undefined)
@@ -59,11 +59,11 @@ function SliceWordArray(wa, start, end) // end is not included
 		for(let i = startWord; i < endWord; ++i)
 			words[words.length] = wa[i];
 
-		let endByteOffset = (end-1) % 4;
+		let endByteOffset = (end-1) % 4; // includes last byte
 		if(endByteOffset !== 3)
 			words[words.length] = (wa[endWord] & GetByteRangeMask(0, endByteOffset)) << endByteOffset * 8;
 	}
-	else // unaligned parse
+	else // misaligned parse
 	{
 		let startWord = start >>> 2;
 		let dwordStride = (end - start) >>> 2;
@@ -81,7 +81,7 @@ function SliceWordArray(wa, start, end) // end is not included
 		for(let i = startWord; i < endWord; ++i) // read all the full dwords
 			words[words.length] = ((wa[i] & firstWordMask) << firstWordShift) | ((wa[i+1] & secondWordMask) >>> secondWordShift);
 
-		if(wordOffset !== endByteOffset) // if it doesnt end on the same word offset as the start		
+		if(byteCount % 4 !== 0) // if there are leftover bytes we need to handle
 		{
 			if(endByteOffset < wordOffset) // if the final bytes spread across several words
 				words[words.length] = ((wa[endWord] & firstWordMask) << firstWordShift) | ((wa[endWord + 1] & GetByteRangeMask(0, endByteOffset)) >>> secondWordShift)
@@ -91,6 +91,77 @@ function SliceWordArray(wa, start, end) // end is not included
 	}
 	
 	return new CryptoJS.lib.WordArray.init(words, byteCount)
+}
+
+// atleast 2x faster than SliceWordArray
+function ChopWordArray(wa, start, end) // same as above but does the slicing on the given array, instead of a newly created one
+{	
+	if(end === undefined)
+		end = wa.sigBytes;
+
+	if(start > wa.sigBytes || end > wa.sigBytes)
+		return undefined;
+
+	let byteCount = end - start;
+	wa.sigBytes = byteCount;
+	let out = wa;
+	wa = wa.words;
+
+	if(start % 4 === 0) // aligned parse
+	{
+		let startWord = start / 4
+		for(let i = 0; i < startWord; ++i)
+			wa.shift();
+			
+		let endWord = (end-start) >>> 2;
+		let wordCount = wa.length;
+
+		let endByteOffset = (end-1) % 4; // includes last byte
+		if(endByteOffset !== 3)
+		{			
+			for(let i = endWord + 1; i < wordCount; ++i)
+				wa.pop();
+
+			wa[wa.length] &= GetByteRangeMask(0, endByteOffset);
+		}
+		else
+			for(let i = endWord; i < wordCount; ++i)
+				wa.pop();
+	}
+	else // misaligned parse
+	{
+		let startWord = start >>> 2;
+
+		let wordOffset = start - startWord * 4;
+		let endByteOffset = (end - 1) % 4; // includes last byte
+
+		let firstWordMask = GetByteRangeMask(wordOffset, 3); // ugly microoptimizations (this way its always atleast on par with a sole uint8array cast)
+		let secondWordMask = GetByteRangeMask(0, wordOffset-1);
+		
+		let firstWordShift = wordOffset * 8;
+		let secondWordShift = (4-wordOffset) * 8;
+
+		for(let i = 0; i < startWord; ++startWord)
+			wa.shift();
+			
+		let endWord = (end - start) >>> 2; // (after shift)
+
+		for(let i = 0; i < endWord; ++i) // move all the full dwords
+			wa[i] = ((wa[i] & firstWordMask) << firstWordShift) | ((wa[i+1] & secondWordMask) >>> secondWordShift);
+
+		if(byteCount % 4 !== 0) // if there are leftover bytes we need to handle
+		{
+			if(endByteOffset < wordOffset) // if the final bytes spread across several words
+				wa[endWord] = ((wa[endWord] & firstWordMask) << firstWordShift) | ((wa[endWord + 1] & GetByteRangeMask(0, endByteOffset)) >>> secondWordShift);
+			else // if the final bytes are all on the same word
+				wa[endWord] = (wa[endWord] & GetByteRangeMask(wordOffset, endByteOffset)) << firstWordShift;
+		}
+		let wordCount = wa.length;
+		for(let i = endWord+1; i < wordCount; ++i)
+			wa.pop();
+	}
+
+	return out;
 }
 
 function Uint8ArrayToWordArray(uint8arr)
@@ -152,19 +223,19 @@ function GenerateBaseKey(pass, callback)
 		pass: pass,
 		salt: "storage.black base key",
 		type: argon2.ArgonType.Argon2id,
-		time: 8-7,
+		time: 8-7, // consider doing 6 insted of 8
 		mem: 500000,
 		hashLen: 64,
 		parallelism: 1
 	}).then(callback);
 }
 
-function GenerateAccountKey(base_key)
+function GenerateAccountID(base_key)
 {
 	return CryptoJS.SHA256(base_key + "storage.black account key").toString(CryptoJS.enc.Hex);
 }
 
-function GenerateEncryptionKey(base_key)
+function GenerateMasterKey(base_key)
 {
 	return CryptoJS.SHA256(base_key + "storage.black encryption key");
 }
@@ -260,13 +331,14 @@ export {
 	CryptoJS,
 	CompareWordArrays,
 	SliceWordArray,
+	ChopWordArray,
 	Uint8ArrayToWordArray,
 	Uint8ArrayToLatin1,
 	Latin1ToUint8Array,
 	WordArrayToUint8Array,
 	GenerateBaseKey,
-	GenerateAccountKey,
-	GenerateEncryptionKey,
+	GenerateAccountID,
+	GenerateMasterKey,
 	GenerateIV,
 	ShortEncrypt,
 	ShortDecrypt,

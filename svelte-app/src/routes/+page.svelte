@@ -4,13 +4,14 @@
 	import {
 		CryptoJS,
 		SliceWordArray,
+		ChopWordArray,
 		Uint8ArrayToWordArray,
 		Uint8ArrayToLatin1,
 		Latin1ToUint8Array,
 		WordArrayToUint8Array,
 		GenerateBaseKey,
-		GenerateAccountKey,
-		GenerateEncryptionKey,
+		GenerateAccountID,
+		GenerateMasterKey,
 		ShortEncrypt,
 		ShortDecrypt
 	} from "$lib";
@@ -18,27 +19,6 @@
 	let key = CryptoJS.enc.Latin1.parse("12345678901234567890123456789012")
 	function window_load()
 	{
-		//console.log(GenerateAccountKey("123"));
-		//console.log(GenerateEncryptionKey("123"));
-
-
-		let bytes = CryptoJS.enc.Utf8.parse("gayl12341fgfghdfghdfghsfghuytdfghsfght6ub45ubyutjftyjfygjfgjfghjfghjfghjfhgjfghjf234");
-		console.log(bytes.toString());
-		console.log(SliceWordArray(bytes, 2, 5).toString());
-
-		let start = Date.now();
-		for(let i = 0; i < 10000000; ++i)
-		{
-			SliceWordArray(bytes, 0, 80);
-		}
-		console.log(Date.now()-start);
-		start = Date.now();
-		for(let i = 0; i < 10000000; ++i)
-		{
-			(WordArrayToUint8Array(bytes).slice(0, 80));
-		}
-		console.log(Date.now()-start);
-		return;
 		let encrypted_data = ShortEncrypt("bufgfgu8hdf87ghdsf78hy54th8etrhgusdhgyu8dsgy78sht87wtr78dfhg98werdjt89werhtuiwerht87dcfb87hnwu549hditughufby78dfhisudfgnisdrbtuidsrbsdgsdfgh", key);
 		console.log(encrypted_data.output.length, CryptoJS.enc.Latin1.parse(encrypted_data.output))
 

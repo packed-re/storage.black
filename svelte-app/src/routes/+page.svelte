@@ -3,8 +3,10 @@
 
 	import {
 		CryptoJS,
+		CompareWordArrays,
 		SliceWordArray,
 		ChopWordArray,
+		ArrayBufferToWordArray,
 		Uint8ArrayToWordArray,
 		Uint8ArrayToLatin1,
 		Latin1ToUint8Array,
@@ -19,14 +21,28 @@
 	let key = CryptoJS.enc.Latin1.parse("12345678901234567890123456789012")
 	function window_load()
 	{
-		let encrypted_data = ShortEncrypt("bufgfgu8hdf87ghdsf78hy54th8etrhgusdhgyu8dsgy78sht87wtr78dfhg98werdjt89werhtuiwerht87dcfb87hnwu549hditughufby78dfhisudfgnisdrbtuidsrbsdgsdfgh", key);
-		console.log(encrypted_data.output.length, CryptoJS.enc.Latin1.parse(encrypted_data.output))
+		console.log(CryptoJS.lib.WordArray.random(32).toString());
+		console.log(CryptoJS.lib.WordArray.random(32).toString());
+		console.log(CryptoJS.lib.WordArray.random(32).toString());
 
-		new Blob([encrypted_data.output.substring(0, 100), encrypted_data.output.substring(100)]).text().then(function(text){
-			console.log("text")
-			console.log(text);
+		let iv = CryptoJS.lib.WordArray.random(16);
+		let aes_stream = CryptoJS.algo.AES.createEncryptor(key, {iv: iv});
+		let cipher = aes_stream.process("busdfgsdfgh").concat(aes_stream.finalize());
+		console.log(CryptoJS.AES.decrypt({ciphertext: cipher}, key, {
+			mode: CryptoJS.mode.CBC,
+			padding: CryptoJS.pad.Pkcs7,
+
+			iv: iv
+		}).toString(CryptoJS.enc.Utf8));
+
+		console.log(Uint8ArrayToWordArray(WordArrayToUint8Array(CryptoJS.enc.Utf8.parse("hello"))).toString(CryptoJS.enc.Utf8));
+
+		let encrypted_data = ShortEncrypt("yeeeerp", key);
+		console.log(encrypted_data.output, encrypted_data.iv);
+
+		new Blob([WordArrayToUint8Array(encrypted_data.output)]).bytes().then(function(data){
 			console.log(ShortDecrypt(
-				text, 
+				Uint8ArrayToWordArray(data), 
 				key,
 				encrypted_data.iv
 			).toString(CryptoJS.enc.Utf8));
@@ -45,14 +61,16 @@
 
 	function file_load()
 	{
-		// just use .text()
-		let file = this.files[0];//.text().then(text => console.log(text));
-		file.bytes().then(function(data_buffer)
+		let file = this.files[0];
+		file.arrayBuffer().then(function(data_buffer) // because chrome doesnt support .bytes for whatever reason
 		{
-			let encrypted_data = ShortEncrypt(Uint8ArrayToWordArray(data_buffer), key);
+			let start = Date.now();
+			console.log("encrypting", file.name);
 
+			let encrypted_data = ShortEncrypt(ArrayBufferToWordArray(data_buffer), key);
+
+			console.log("storing", data_buffer);
 			let enc_blob = new Blob([WordArrayToUint8Array(encrypted_data.iv.concat(encrypted_data.output))]);
-
 			let blob_url = URL.createObjectURL(enc_blob);
 
 			var link = document.createElement("a");
@@ -60,21 +78,26 @@
 			link.download = file.name + ".encrypted";
 			link.innerText = "Click here to download the file";
 			document.body.appendChild(link);
+
+			console.log("finished encrypting", file.name, Date.now() - start);
 		})
 	}
 
 	function file_load_decrypt()
 	{
-		// just use .text()
-		let file = this.files[0];//.text().then(text => console.log(text));
-		file.bytes().then(function(data_buffer)
+		let file = this.files[0];
+		file.arrayBuffer().then(function(data_buffer) // because chrome doesnt support .bytes for whatever reason
 		{
-			let iv = data_buffer.slice(0, 16);
-			let data = data_buffer.slice(16);
+			data_buffer = ArrayBufferToWordArray(data_buffer);
 
-			let encrypted_data = ShortDecrypt(Uint8ArrayToLatin1(data), key, Uint8ArrayToWordArray(iv));
-			let enc_blob = new Blob([word]);
+			let iv = SliceWordArray(data_buffer, 0, 16);
+			ChopWordArray(data_buffer, 16);
 
+			console.log("decrypting", file.name);
+
+			let plaintext = ShortDecrypt(data_buffer, key, iv);
+
+			let enc_blob = new Blob([WordArrayToUint8Array(plaintext)]);
 			let blob_url = URL.createObjectURL(enc_blob);
 
 			var link = document.createElement("a");
@@ -82,7 +105,29 @@
 			link.download = file.name.substring(0, file.name.length - (".encrypted".length));
 			link.innerText = "Click here to download the decr";
 			document.body.appendChild(link);
+
+			console.log("finished", file.name);
 		});
+	}
+
+	function file_testing()
+	{
+		let file = this.files[0];//.text().then(text => console.log(text));
+		file.arrayBuffer().then(function(data_buffer) // because chrome doesnt support .bytes for whatever reason
+		{
+			console.log("uhhh")
+			let start = Date.now();
+			for(let i = 0; i < 10; ++i)
+				ArrayBufferToWordArray(data_buffer.slice(0));
+
+			console.log(Date.now()-start);
+			
+			start = Date.now();
+			for(let i = 0; i < 10; ++i)
+				Uint8ArrayToWordArray(new Uint8Array(data_buffer.slice(0)));
+
+			console.log(Date.now()-start);
+		})
 	}
 
 	function Argon2GenCallback(argon2_hash)
@@ -94,5 +139,6 @@
 <svelte:window on:load={window_load}/>
 <input type="file" on:change={file_load}>
 <input type="file" on:change={file_load_decrypt}>
+<input type="file" on:change={file_testing}>
 
 123

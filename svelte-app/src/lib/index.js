@@ -1,5 +1,6 @@
 import CryptoJS from "crypto-js";
 
+// returns true if equal
 function CompareWordArrays(wa1, wa2)
 {
 	wa1 = wa1.words;
@@ -32,6 +33,7 @@ function GetNByteMask(byte_n)
 	}
 }
 
+// for cryptojs's "words"
 function GetByteRangeMask(start, end) // end is included
 {
 	return GetNByteMask(end-start) >> (start * 8)
@@ -164,6 +166,45 @@ function ChopWordArray(wa, start, end) // same as above but does the slicing on 
 	return out;
 }
 
+function RotateUInt32(ui32)
+{
+	return ((ui32 & 0x000000FF) << 24) | 
+	       ((ui32 & 0x0000FF00) << 8) | 
+	       ((ui32 & 0x00FF0000) >>> 8) | 
+	       ((ui32 & 0xFF000000) >>> 24);
+}
+
+// the gain in speed, compared to Uint8ArrayToWordArray, varies a lot, but tends to be around the 2x mark
+function ArrayBufferToWordArray(array_buffer) // for the sake of speed, this destroys the input array buffer. If you need it for something else afterwards, you should pass this function a copy by doing .slice(0)
+{
+	let byteCount = array_buffer.byteLength;
+	let words = [];
+
+	let leftOverByteCount  = byteCount % 4;
+	let dwordStride = byteCount - leftOverByteCount;
+
+	let uint32_array;
+	let leftOverBytes;
+	if(leftOverByteCount !== 0)
+	{
+		leftOverBytes = new Uint8Array(array_buffer.slice(dwordStride));
+		array_buffer = array_buffer.transfer(dwordStride);
+	}
+
+	uint32_array = new Uint32Array(array_buffer);
+	let dwordCount = dwordStride / 4;
+
+	for(let i = 0; i < dwordCount; ++i)
+		words[i] = RotateUInt32(uint32_array[i])
+
+	if(leftOverBytes !== undefined)
+		for(let i = 0; i < leftOverByteCount; ++i)
+			words[dwordCount] |= leftOverBytes[i] << (24 - i*8);
+
+
+	return new CryptoJS.lib.WordArray.init(words, byteCount);
+}
+
 function Uint8ArrayToWordArray(uint8arr)
 {
 	let byteCount = uint8arr.length;
@@ -172,7 +213,7 @@ function Uint8ArrayToWordArray(uint8arr)
 	for(let i = 0; i < byteCount; ++i)
 	{
 		let word_i = i >>> 2
-		words[word_i] = (words[word_i] << 8) + uint8arr[i];
+		words[word_i] = (words[word_i] << 8) + uint8arr[i]; 																																																	// WARNING! WARNING! WARNING! CHROME IS FUCKING DOGSHIT AND WILL THROW A RANGEERROR AT AN ARBITRARY ARRAY LENGTH (50139473 when testied). BE EXCEPTIONALLY CAUTIOUS WITH CHROMIUM CLIENTS.
 	}
 
 	if(byteCount % 4 !== 0)
@@ -216,28 +257,32 @@ function WordArrayToUint8Array(word_array)
 	return out;
 }
 
+let _ArgonBaseKey = WordArrayToUint8Array(CryptoJS.enc.Hex.parse("57d7f4ba75600c6992d9e0eb2e2f6b0e5b750276675cef0c9b112c54a2f1dd82"));
+let _AccountIDSalt = CryptoJS.enc.Hex.parse("5d54dfe28d8adb0a63fff0e518db2bed2eaedef5fd34084bc14f328f21832ba0");
+let _MasterKeySalt = CryptoJS.enc.Hex.parse("170a3530f5d5bde9156e86a539b1b7500b40b6a7caa163e0f819f2ce9745adb8");
+
 // Use this only when the argon2 library has loaded
 function GenerateBaseKey(pass, callback)
 {
 	return argon2.hash({
 		pass: pass,
-		salt: "storage.black base key",
+		salt: _ArgonBaseKey,
 		type: argon2.ArgonType.Argon2id,
 		time: 8-7, // consider doing 6 insted of 8
 		mem: 500000,
-		hashLen: 64,
+		hashLen: 32,
 		parallelism: 1
 	}).then(callback);
 }
 
 function GenerateAccountID(base_key)
 {
-	return CryptoJS.SHA256(base_key + "storage.black account key").toString(CryptoJS.enc.Hex);
+	return CryptoJS.HmacSHA256(base_key, _AccountIDSalt).toString(CryptoJS.enc.Hex);
 }
 
 function GenerateMasterKey(base_key)
 {
-	return CryptoJS.SHA256(base_key + "storage.black encryption key");
+	return CryptoJS.HmacSHA256(base_key, _MasterKeySalt);
 }
 
 function GenerateIV()
@@ -249,7 +294,7 @@ function GenerateIV()
 function ShortEncrypt(data, key) // key is a WordArrays. data should be able to be both a WordArray and a string
 {
 	let iv = GenerateIV();
-
+	console.log("encr started")
 	let ciphertext = CryptoJS.AES.encrypt(data, key, {
 		mode: CryptoJS.mode.CBC,
 		padding: CryptoJS.pad.Pkcs7,
@@ -284,13 +329,13 @@ function ShortDecrypt(data, key, iv) // everything is a word array
 		return false;
 	}
 
-	let hmac_secret_salt = data.slice(0, 8); // 64 bit salt
-	let cipher_hmac = data.slice(8, 40); // 256 bits of SHA256
-	let ciphertext = data.slice(40);
+	let hmac_secret_salt = SliceWordArray(data, 0, 8); // 64 bit salt
+	let cipher_hmac = SliceWordArray(data, 8, 40); // 256 bits of SHA256
+	let ciphertext = SliceWordArray(data, 40);
 
-	let received_hmac = CryptoJS.HmacSHA256(ciphertext, key.clone().concat(hmac_secret_salt)).toString(CryptoJS.enc.Latin1);
+	let received_hmac = CryptoJS.HmacSHA256(ciphertext, key.clone().concat(hmac_secret_salt));
 
-	if(cipher_hmac !== received_hmac)
+	if(!CompareWordArrays(cipher_hmac, received_hmac))
 	{
 		console.log("ciphertext is malformed");
 		return false;
@@ -306,10 +351,9 @@ function ShortDecrypt(data, key, iv) // everything is a word array
 	return plaintext;
 }
 
-
 // key is a word array
 // data_encrypt_callback is called with partial ciphertext received from iterating throug the blob, in Latin1 encoding (raw bytes in string form)
-// finished_callback is called once everything has finished encryping and is given the hmac of the ciphertext
+// finished_callback is called once everything has finished encryping and is given the hmac+salt of the ciphertext
 function BlobEncrypt(key, source_blob, data_encrypt_callback, finished_callback)
 {
 	/*this.key = key;
@@ -323,7 +367,11 @@ function BlobEncrypt(key, source_blob, data_encrypt_callback, finished_callback)
 
 	let iv = GenerateIV();
 	let hmac_secret_salt = CryptoJS.lib.WordArray.random(8);
+
+	let hmac_stream = CryptoJS.algo.HMAC.create(CryptoJS.algo.SHA256, key.clone().concat(hmac_secret_salt));
+	let aes_stream = CryptoJS.algo.AES.createEncryptor(key, {iv: iv}); // this default to CBC Pkcs7 (thank god)
 	
+	source_blob
 }
 
 
@@ -332,6 +380,7 @@ export {
 	CompareWordArrays,
 	SliceWordArray,
 	ChopWordArray,
+	ArrayBufferToWordArray,
 	Uint8ArrayToWordArray,
 	Uint8ArrayToLatin1,
 	Latin1ToUint8Array,

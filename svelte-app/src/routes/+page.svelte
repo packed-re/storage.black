@@ -15,7 +15,8 @@
 		GenerateAccountID,
 		GenerateMasterKey,
 		ShortEncrypt,
-		ShortDecrypt
+		ShortDecrypt,
+		Encryptor
 	} from "$lib";
 
 	let key = CryptoJS.enc.Latin1.parse("12345678901234567890123456789012")
@@ -69,7 +70,6 @@
 
 			let encrypted_data = ShortEncrypt(ArrayBufferToWordArray(data_buffer), key);
 
-			console.log("storing", data_buffer);
 			let enc_blob = new Blob([WordArrayToUint8Array(encrypted_data.iv.concat(encrypted_data.output))]);
 			let blob_url = URL.createObjectURL(enc_blob);
 
@@ -110,24 +110,33 @@
 		});
 	}
 
-	function file_testing()
+	function file_testing() // im pretty sure using streamreaders, as encryptchunk does, is much faster than an .arrayBuffer call, i assume because the TypedArray is loaded directly and right away in C, instead of by us asking explicitly and flip flopping between the environments.
 	{
 		let file = this.files[0];//.text().then(text => console.log(text));
-		file.arrayBuffer().then(function(data_buffer) // because chrome doesnt support .bytes for whatever reason
-		{
-			console.log("uhhh")
-			let start = Date.now();
-			for(let i = 0; i < 10; ++i)
-				ArrayBufferToWordArray(data_buffer.slice(0));
+		let encryptor = new Encryptor(file, 100_000_000, key);		
+		let outBlob = new Blob();
+		console.log("blob",file.name);
+		let start = Date.now();
+		encryptor.EncryptChunk(function encChunk(ciphertext, done){
+			outBlob = new Blob([outBlob, WordArrayToUint8Array(ciphertext)]);
 
-			console.log(Date.now()-start);
-			
-			start = Date.now();
-			for(let i = 0; i < 10; ++i)
-				Uint8ArrayToWordArray(new Uint8Array(data_buffer.slice(0)));
+			if(done)
+			{
+				let iv = encryptor.iv;
+				let hmac = encryptor.RetrieveHMAC();
 
-			console.log(Date.now()-start);
-		})
+				var link = document.createElement("a");
+				link.href = URL.createObjectURL(new Blob([WordArrayToUint8Array(iv.clone().concat(hmac)), outBlob]));
+				link.download = file.name + ".encrypted";
+				link.innerText = "[Blob Encrypt Test]";
+				document.body.appendChild(link);
+				console.log("finished blob encrypt", Date.now()-start)
+				return;
+			}
+			else
+				encryptor.EncryptChunk(encChunk);
+
+		});
 	}
 
 	function Argon2GenCallback(argon2_hash)

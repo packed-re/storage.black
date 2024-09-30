@@ -295,6 +295,7 @@ function ShortEncrypt(data, key) // key is a WordArrays. data should be able to 
 {
 	let iv = GenerateIV();
 	console.log("encr started")
+
 	let ciphertext = CryptoJS.AES.encrypt(data, key, {
 		mode: CryptoJS.mode.CBC,
 		padding: CryptoJS.pad.Pkcs7,
@@ -330,12 +331,12 @@ function ShortDecrypt(data, key, iv) // everything is a word array
 	}
 
 	let hmac_secret_salt = SliceWordArray(data, 0, 8); // 64 bit salt
-	let cipher_hmac = SliceWordArray(data, 8, 40); // 256 bits of SHA256
+	let received_hmac = SliceWordArray(data, 8, 40); // 256 bits of SHA256
 	let ciphertext = SliceWordArray(data, 40);
 
-	let received_hmac = CryptoJS.HmacSHA256(ciphertext, key.clone().concat(hmac_secret_salt));
+	let calculated_hmac = CryptoJS.HmacSHA256(ciphertext, key.clone().concat(hmac_secret_salt));
 
-	if(!CompareWordArrays(cipher_hmac, received_hmac))
+	if(!CompareWordArrays(received_hmac, calculated_hmac))
 	{
 		console.log("ciphertext is malformed");
 		return false;
@@ -351,27 +352,56 @@ function ShortDecrypt(data, key, iv) // everything is a word array
 	return plaintext;
 }
 
-// key is a word array
-// data_encrypt_callback is called with partial ciphertext received from iterating throug the blob, in Latin1 encoding (raw bytes in string form)
-// finished_callback is called once everything has finished encryping and is given the hmac+salt of the ciphertext
-function BlobEncrypt(key, source_blob, data_encrypt_callback, finished_callback)
+class Encryptor
 {
-	/*this.key = key;
+	constructor(source_blob, chunk_size, key) // key is a word array
+	{
+		this._finished = false;
 
-	this.get_data_callback = get_data_callback;
-	this.data_encrypt_callback = data_encrypt_callback;
-	this.finished_callback = finished_callback;
+		this._source_blob = source_blob;
 
-	this.iv = GenerateIV();
-	this.hmac_secret_salt = CryptoJS.lib.WordArray.random(8);*/
+		this._read_buffer = new ArrayBuffer(chunk_size);
+		this._stream_reader = this._source_blob.stream().getReader({mode: "byob"});
 
-	let iv = GenerateIV();
-	let hmac_secret_salt = CryptoJS.lib.WordArray.random(8);
+		this.iv = GenerateIV();
+		this.hmac_secret_salt = CryptoJS.lib.WordArray.random(8);
 
-	let hmac_stream = CryptoJS.algo.HMAC.create(CryptoJS.algo.SHA256, key.clone().concat(hmac_secret_salt));
-	let aes_stream = CryptoJS.algo.AES.createEncryptor(key, {iv: iv}); // this default to CBC Pkcs7 (thank god)
-	
-	source_blob
+		this._hmac_stream = CryptoJS.algo.HMAC.create(CryptoJS.algo.SHA256, key.clone().concat(this.hmac_secret_salt));
+		this._aes_stream = CryptoJS.algo.AES.createEncryptor(key, {
+			mode: CryptoJS.mode.CBC,
+			padding: CryptoJS.pad.Pkcs7,
+			
+			iv: this.iv
+		});
+	}
+
+	EncryptChunk(callback) // callback called with ciphertext, done. When done is true, buffer is the final bit of encrypted data.
+	{
+		let _this = this;
+
+		this._stream_reader.read(new Uint8Array(this._read_buffer)).then(function({value, done})
+		{
+			_this._read_buffer = value.buffer;
+
+			let ciphertext;
+			if(done) // despite how it may be presented in mdn, when the done parameter is set to true, value always points to an empty buffer, instead of undefined or the last chunk
+			{
+				_this._finished = true;
+				ciphertext = _this._aes_stream.finalize();
+			}
+			else
+				ciphertext = _this._aes_stream.process(Uint8ArrayToWordArray(value));
+
+			_this._hmac_stream.update(ciphertext);
+			callback(ciphertext, done);
+		});
+	}
+
+	RetrieveHMAC() // returns hmac_salt.concat(hmac)
+	{
+		if(this._finished)
+			return this.hmac_secret_salt.concat(this._hmac_stream.finalize());
+	}
 }
 
 
@@ -391,5 +421,5 @@ export {
 	GenerateIV,
 	ShortEncrypt,
 	ShortDecrypt,
-	BlobEncrypt
+	Encryptor
 };

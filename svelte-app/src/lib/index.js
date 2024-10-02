@@ -359,8 +359,11 @@ class Encryptor
 		this._finished = false;
 
 		this._source_blob = source_blob;
+		
+		this._chunk_size = chunk_size;
+		this._read_buffer = new ArrayBuffer(this._chunk_size + 65536 * 3); // Extra bytes so that the browser isn't forced to do extra unnececary logic for uneven memory allocation.
+		this._buffer_read_offset = 0;
 
-		this._read_buffer = new ArrayBuffer(chunk_size);
 		this._stream_reader = this._source_blob.stream().getReader({mode: "byob"});
 
 		this.iv = GenerateIV();
@@ -379,28 +382,91 @@ class Encryptor
 	{
 		let _this = this;
 
-		this._stream_reader.read(new Uint8Array(this._read_buffer)).then(function({value, done})
+		this._stream_reader.read(new Uint8Array(this._read_buffer, this._buffer_read_offset)).then(function({value, done})
 		{
-			_this._read_buffer = value.buffer;
+			_this._read_buffer = value.buffer; // 65536
+			_this._buffer_read_offset += value.byteLength;
 
-			let ciphertext;
 			if(done) // despite how it may be presented in mdn, when the done parameter is set to true, value always points to an empty buffer, instead of undefined or the last chunk
 			{
 				_this._finished = true;
-				ciphertext = _this._aes_stream.finalize();
-			}
-			else
-				ciphertext = _this._aes_stream.process(Uint8ArrayToWordArray(value));
 
-			_this._hmac_stream.update(ciphertext);
-			callback(ciphertext, done);
+				let ciphertext;
+				if(_this._buffer_read_offset > 0)
+					ciphertext = _this._aes_stream.process(Uint8ArrayToWordArray(new Uint8Array(_this._read_buffer, 0, _this._buffer_read_offset))).concat(_this._aes_stream.finalize());
+				else 
+					ciphertext = _this._aes_stream.finalize();
+
+				_this._hmac_stream.update(ciphertext);
+				return callback(ciphertext, done);
+			}
+			else if(_this._buffer_read_offset >= _this._chunk_size)
+			{
+				let ciphertext = _this._aes_stream.process(Uint8ArrayToWordArray(new Uint8Array(_this._read_buffer, 0, _this._buffer_read_offset)));
+				_this._buffer_read_offset = 0;
+
+				_this._hmac_stream.update(ciphertext);
+				return callback(ciphertext, done);
+			}
+
+			_this.EncryptChunk(callback);
 		});
 	}
 
 	RetrieveHMAC() // returns hmac_salt.concat(hmac)
 	{
 		if(this._finished)
-			return this.hmac_secret_salt.concat(this._hmac_stream.finalize());
+		{
+			if(this._calculated_hmac === undefined)
+				this._calculated_hmac = this._hmac_stream.finalize();
+
+			return this._calculated_hmac;
+		}
+		else
+			throw "Encryptor.RetrieveHMAC called before stream finished";
+	}
+}
+
+class Decryptor
+{
+	constructor(key, iv, hmac_secret_salt, hmac) // everything is a WordArray
+	{
+		this._hmac = hmac;
+
+		this._stream_reader = this._source_blob.stream().getReader({mode: "byob"});
+
+		this._hmac_stream = CryptoJS.algo.HMAC.create(CryptoJS.algo.SHA256, key.clone().concat(hmac_secret_salt));
+		this._aes_stream = CryptoJS.algo.AES.createDecryptor(key, {
+			mode: CryptoJS.mode.CBC,
+			padding: CryptoJS.pad.Pkcs7,
+			
+			iv: iv
+		});
+	}
+
+	DecryptChunk(chunk) // chunk is expected to be a WordArray
+	{
+		this._hmac_stream.process(chunk);
+		return this._aes_stream.process(chunk);
+	}
+
+	Finalize()
+	{
+		this._finished = true;
+		return this._aes_stream.finalize();
+	}
+
+	ValidHMAC() // returns bool
+	{
+		if(this._finished)
+		{
+			if(this._hmac_matches === undefined)
+				this._hmac_matches = CompareWordArrays(this._hmac, this._hmac_stream.finalize());
+			
+			return this._hmac_matches;
+		}
+		else
+			throw "Decryptor.ValidHMAC called before stream finished";
 	}
 }
 
@@ -421,5 +487,6 @@ export {
 	GenerateIV,
 	ShortEncrypt,
 	ShortDecrypt,
-	Encryptor
+	Encryptor,
+	Decryptor
 };

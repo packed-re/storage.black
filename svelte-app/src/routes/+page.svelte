@@ -110,10 +110,10 @@
 		});
 	}
 
-	function file_testing() // im pretty sure using streamreaders, as encryptchunk does, is much faster than an .arrayBuffer call, i assume because the TypedArray is loaded directly and right away in C, instead of by us asking explicitly and flip flopping between the environments.
+	function file_testing() // Im pretty sure using streamreaders, as encryptchunk does, is much faster than an .arrayBuffer call. I assume because the TypedArray is loaded directly and right away in C, instead of by us asking explicitly and flip flopping between the environments.
 	{
 		let file = this.files[0];//.text().then(text => console.log(text));
-		let encryptor = new Encryptor(file, 100_000_000, key);		
+		let encryptor = new Encryptor(file, 10_000_000, key);		
 		let outBlob = new Blob();
 		console.log("blob",file.name);
 		let start = Date.now();
@@ -126,7 +126,7 @@
 				let hmac = encryptor.RetrieveHMAC();
 
 				var link = document.createElement("a");
-				link.href = URL.createObjectURL(new Blob([WordArrayToUint8Array(iv.clone().concat(hmac)), outBlob]));
+				link.href = URL.createObjectURL(new Blob([WordArrayToUint8Array(iv.clone().concat(encryptor.hmac_secret_salt).concat(hmac)), outBlob]));
 				link.download = file.name + ".encrypted";
 				link.innerText = "[Blob Encrypt Test]";
 				document.body.appendChild(link);

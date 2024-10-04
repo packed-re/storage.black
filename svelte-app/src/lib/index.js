@@ -257,22 +257,24 @@ function WordArrayToUint8Array(word_array)
 	return out;
 }
 
-let _ArgonBaseKey = WordArrayToUint8Array(CryptoJS.enc.Hex.parse("57d7f4ba75600c6992d9e0eb2e2f6b0e5b750276675cef0c9b112c54a2f1dd82"));
+let _ArgonBaseKeySalt = WordArrayToUint8Array(CryptoJS.enc.Hex.parse("57d7f4ba75600c6992d9e0eb2e2f6b0e5b750276675cef0c9b112c54a2f1dd82"));
 let _AccountIDSalt = CryptoJS.enc.Hex.parse("5d54dfe28d8adb0a63fff0e518db2bed2eaedef5fd34084bc14f328f21832ba0");
 let _MasterKeySalt = CryptoJS.enc.Hex.parse("170a3530f5d5bde9156e86a539b1b7500b40b6a7caa163e0f819f2ce9745adb8");
 
-// Use this only when the argon2 library has loaded
+// Use this only when the page has loaded
 function GenerateBaseKey(pass, callback)
 {
-	return argon2.hash({
+	let argon2_worker = new Worker("/argon2_worker.js"); // realistically this is only going to get called once, and if not, we should be allowed to generate several keys simultaneously
+
+	argon2_worker.postMessage({
 		pass: pass,
-		salt: _ArgonBaseKey,
-		type: argon2.ArgonType.Argon2id,
-		time: 8-7, // consider doing 6 insted of 8
-		mem: 500000,
-		hashLen: 32,
-		parallelism: 1
-	}).then(callback);
+		salt: _ArgonBaseKeySalt
+	});
+
+	argon2_worker.addEventListener("message", function(event){
+		callback(event.data);
+		argon2_worker.terminate();
+	})
 }
 
 function GenerateAccountID(base_key)
@@ -409,7 +411,7 @@ class Encryptor
 				return callback(ciphertext, done);
 			}
 
-			_this.EncryptChunk(callback);
+			_this.EncryptChunk(callback); // keep executing until we've read the desired amount of memory
 		});
 	}
 

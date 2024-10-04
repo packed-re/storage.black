@@ -6,17 +6,22 @@
 		GenerateMasterKey,
 	} from "$lib"
 
-	import SpinningCircle from "../SpinningCircle.svelte";
+	import StatusBox from "../StatusBox.svelte";
 
-	let status_box;
+	let passcode_input;
 	
-	let argon2_worker;
+	let status_box_data = {
+		open: false,
+		state: "loading",
+		text: "Generating Key..."
+	}
 	function on_enter()
 	{
-		status_box.style.top = "20px"
-		GenerateBaseKey("123", function(key){
-			console.log(key.hashHex);
-			status_box.style.top = "-60px";
+		status_box_data.open = true;
+		GenerateBaseKey(passcode_input.value, function(key){
+			console.log(key.hashHex);			
+			status_box_data.state = "finished";
+			status_box_data.text = "Key Successfully Generated!"
 		});
 	}
 </script>
@@ -42,35 +47,6 @@
 		height: 100dvh;
 
 		background-color: rgb(0,0,0);
-	}
-
-	#status-box{
-		transition: top 0.5s;
-
-		position: fixed;
-		top: -60px;
-
-		display: flex;
-		flex-direction: row;
-		justify-content: start;
-		align-items: center;
-
-		background-color: rgb(20, 20, 20);
-		border-radius: 10px;
-
-		box-sizing: border-box;
-		padding: 0 20px;
-
-		width: 240px;
-		height: 60px;
-	}
-
-	#status-box > p{
-		color: white;
-		font-size: 15px;
-
-		margin: 0 0 0 30px;
-		padding: 0;
 	}
 
 	#login-window{		
@@ -112,7 +88,7 @@
 		height: 37px;
 
 		margin: 0;
-		padding: 0 0 0 13px;
+		padding: 0 13px;
 		box-sizing: border-box;
 	}
 
@@ -123,6 +99,8 @@
 	#login-window > button{		
 		font-family: Montserrat;
 		font-size: 15px;
+
+		cursor: pointer;
 
 		border: none;
 		border-radius: 4px;
@@ -151,14 +129,10 @@
 	}
 </style>
 
-<div id="status-box" bind:this={status_box}>
-	<SpinningCircle size=30px speed=1.2s/>
-	<p>Generating Key...</p>
-</div>
-
+<StatusBox {...status_box_data}/>
 <div id="login-window">
 	<p>storage.black</p>
-	<input type="password" placeholder="Passcode">
+	<input type="password" placeholder="Passcode" bind:this={passcode_input}>
 	<button on:click={on_enter}>Enter</button>
 </div>
 

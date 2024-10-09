@@ -279,7 +279,7 @@ function GenerateBaseKey(pass, callback)
 
 function GenerateAccountID(base_key)
 {
-	return CryptoJS.HmacSHA256(base_key, _AccountIDSalt).toString(CryptoJS.enc.Hex);
+	return CryptoJS.HmacSHA256(base_key, _AccountIDSalt);
 }
 
 function GenerateMasterKey(base_key)
@@ -293,14 +293,14 @@ function GenerateIV()
 }
 
 // key needs to be of proper length otherwise SerializableCipher will break!!!! 
-function ShortEncrypt(data, key) // key is a WordArrays. data should be able to be both a WordArray and a string
+function ShortEncrypt(data, key, padding = CryptoJS.pad.Pkcs7) // key is a WordArrays. data should be able to be both a WordArray and a string
 {
 	let iv = GenerateIV();
 	console.log("encr started")
 
 	let ciphertext = CryptoJS.AES.encrypt(data, key, {
 		mode: CryptoJS.mode.CBC,
-		padding: CryptoJS.pad.Pkcs7,
+		padding: padding,
 
 		iv: iv
 	}).ciphertext;
@@ -318,7 +318,7 @@ function ShortEncrypt(data, key) // key is a WordArrays. data should be able to 
 	};
 }
 
-function ShortDecrypt(data, key, iv) // everything is a word array
+function ShortDecrypt(data, key, iv, padding = CryptoJS.pad.Pkcs7) // everything is a word array
 {
 	if(data.sigBytes <= 40)
 	{
@@ -346,7 +346,7 @@ function ShortDecrypt(data, key, iv) // everything is a word array
 
 	let plaintext = CryptoJS.AES.decrypt({ciphertext: ciphertext}, key, {
 		mode: CryptoJS.mode.CBC,
-		padding: CryptoJS.pad.Pkcs7,
+		padding: padding,
 
 		iv: iv
 	});

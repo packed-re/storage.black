@@ -1,0 +1,30 @@
+ENCRYPTION SCHEME
+iv (optional) + hmac salt + hmac + ciphertext 
+cipher header size with iv - 56 bytes
+	without iv - 40 bytes (typically the stuff thats received from the client)
+
+RESPONSE SCHEME
+	- 1 byte containing (custom) response code
+	- variable size data
+
+GET /session
+- Field "session". Session token retrieved from POST /sessions.
+Returns encryption key for account data. Returns the byte 0 if expired.
+
+POST /session
+- Field "age". Time in seconds of how long the session should stay valid for. If 0 session never expires.
+Returns a session token and encryption key for account data.
+
+POST /file
+(in $_FILES)
+- Authority
+	- account_id - 32 bytes (ideally this should be uploaded encrypted with the session encryption key, without padding)
+	- session_token - 48 bytes realistically, but should always be sent last so as to leave the possibility to add data to the session token in the future
+- FileHeader
+	- write_offset - 8 bytes
+	- file_size - 8 bytes
+	- encryption_key - 48 bytes (16 (iv) + 32 (enc key)) (this should be uploaded with no padding from the client)
+	- file_data - up to 512 bytes (this is the metadata)
+- FileContent
+	- the raw content thats to be written to disk - variable size
+

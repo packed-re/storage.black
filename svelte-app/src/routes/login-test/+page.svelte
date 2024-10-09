@@ -15,6 +15,7 @@
 		state: "loading",
 		text: "Generating Key..."
 	}
+
 	let generating_base_key = false;
 	function on_enter()
 	{
@@ -32,7 +33,7 @@
 				status_box_data.open = false;
 				setTimeout(function(){
 					status_box_data.state = "loading";
-					generating_base_key = false;
+					//generating_base_key = false;
 				}, 500);
 			}, 1000)
 		});
@@ -73,15 +74,13 @@
 	}
 
 	#login-window > p{
-		display: none;
-
 		text-transform: uppercase;
 		user-select: none;
 		
 		position: relative;
-		bottom: min(20dvh, min(60dvw, 185px));
+		bottom: 13dvh;
 
-		font-size: min(50px, 10dvw);
+		font-size: min(50px, 9.7dvw);
 		font-weight: 600;
 
 		background: linear-gradient(84.48deg, #8F00FF, #FF00E6);
@@ -138,7 +137,8 @@
 	}
 	@media (width < 470px) {
 		#login-window > p{
-			/*font-size: calc(100dvw / 9.4);*/
+			/*bottom: 10dvh;
+			font-size: calc(100dvw / 9.4);*/
 		}
 	}
 </style>

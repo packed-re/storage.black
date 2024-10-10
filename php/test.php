@@ -3,7 +3,12 @@
 	require_once("lib/session.php");
 	require_once("lib/utility.php");
 
-	ExitResponse(ResponseType::ServerError, CreateSecureResponseData(bin2hex(random_bytes(32))));
+	RouteSetup();
+
+	//$thing = $tt;
+	echo sprintf("%d<br>", 123);
+	exit();
+
 	$token = Session::Make(10)->ToToken();
 	//sleep(9);
 	$session = Session::FromToken($token);

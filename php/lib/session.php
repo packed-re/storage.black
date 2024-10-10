@@ -8,7 +8,7 @@
 		public $encryption_key;
 		public $expire_date; // timestamp after which the session is no longer valid
 
-		public function __construct($encryption_key, $expire_date) // use this to create a new session
+		protected function __construct($encryption_key, $expire_date) // use this to create a new session
 		{
 			$this->encryption_key = $encryption_key;
 			$this->expire_date = $expire_date;

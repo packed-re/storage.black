@@ -40,12 +40,44 @@
 		}
 	}
 
+	function handle_errors()
+	{
+		set_exception_handler(function($throwable){
+			ExitResponse(
+				ResponseType::UnknownServerError,
+				sprintf("Uncaught Exception\n%s: %s\n\nStack Trace:\n%s", get_class($throwable), $throwable->getMessage(), $throwable->getTraceAsString())
+			);
+		});
+
+		set_error_handler(function(
+			$errno,
+			$errstr,
+			$errfile,
+			$errline,
+			$errocontext = null
+		){
+			ExitResponse(
+				ResponseType::UnknownServerError,
+				sprintf("Uncaught Error (%d) - Line %d of %s\n%s", $errno, $errline, $errfile, $errstr)
+			);
+		});
+	}
+
+	function RouteSetup()
+	{
+		handle_errors();
+		handle_cors();
+	}
+
 	enum ResponseType: int
 	{
 		case Success = 0;
-		case ServerError = 1;
-		case UnknownError = 2;
-		case BadRequestMethod = 3;
+		case MissingArgument = 1;
+		case BadArgument = 2;
+		case SessionExpired = 3;
+		case BadRequestMethod = 4;
+		case ServerError = 5;
+		case UnknownServerError = 6;
 	}
 
 	function CreateResponse($responseType, $data=null) // data is expected to be a string
@@ -55,6 +87,7 @@
 
 	function ExitResponse($responseType, $data = null)
 	{
+		ob_clean();
 		exit(CreateResponse($responseType, $data));
 	}
 

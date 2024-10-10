@@ -8,23 +8,27 @@
 	{
 		case "GET":
 			$response_data = GetAllRequestData();
-
 			if(!isset($response_data["session"]))
 				ExitResponse(
 					ResponseType::MissingArgument,
 					"session not provided"
 				);
 			
-			$session = Session::FromToken($response_data["session"]);
+			$decoded = base64_decode($response_data["session"]);
+			if($decoded === false)
+				ExitResponse(
+					ResponseType::BadArgument,
+					"failed to decode session token"
+				);
 
+			$session = Session::FromToken($decoded);
 			if($session !== false)
-				ExitResponse(ResponseType::Success);
+				ExitResponse(ResponseType::Success, $session->encryption_key);
 			else
 				ExitResponse(ResponseType::SessionExpired);
 
 		case "POST":
 			$response_data = GetAllRequestData();
-
 			if(!isset($response_data["age"]))
 				ExitResponse(
 					ResponseType::MissingArgument,
@@ -32,14 +36,15 @@
 				);
 			
 			$age = intval($response_data["age"]);
-
 			if($age === 0)
 				ExitResponse(
 					ResponseType::BadArgument,
 					"age is invalid"
 				);
 			
-			ExitResponse(ResponseType::Success, Session::Make($age)->ToToken());
+			$new_session = Session::Make($age);
+
+			ExitResponse(ResponseType::Success, pack("a32a*", $new_session->encryption_key, $new_session->ToToken()));
 
 		default:
 			ExitResponse(ResponseType::BadRequestMethod);

@@ -7,19 +7,26 @@ RESPONSE SCHEME
 	- 1 byte containing (custom) response code
 	- variable size data
 
+
+Account is created only once a file is uploaded or once an activation code is used
+
+
 GET /session
-- Field "session". Session token retrieved from POST /sessions.
+- Field "session". Session token retrieved from POST /sessions, in base64.
 Returns encryption key for account data. Returns the byte 0 if expired.
 
 POST /session
 - Field "age". Time in seconds of how long the session should stay valid for. If 0 session never expires.
 Returns a session token and encryption key for account data.
+	- encryption_key - 32 bytes
+	- token - atleast 48 bytes
 
 POST /file
 (in $_FILES)
-- Authority
-	- account_id - 32 bytes (ideally this should be uploaded encrypted with the session encryption key, without padding)
-	- session_token - 48 bytes realistically, but should always be sent last so as to leave the possibility of adding data to the session token in the future
+- Access
+	- account_id - 32 bytes 		// (ideally this should be uploaded encrypted with the session encryption key, without padding)
+	- action_type - 1 byte (contains the code of the desired action to take. 0 to get contents, in which case FileContent is not provided, or 1 to upload data)
+			// - session_token - 48 bytes realistically, but should always be sent last so as to leave the possibility of adding data to the session token in the future
 - FileHeader
 	- write_offset - 8 bytes
 	- file_size - 8 bytes

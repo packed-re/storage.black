@@ -1,8 +1,6 @@
 <?php
 	require_once($_SERVER["DOCUMENT_ROOT"] . "/lib/crypto.php");
 
-	// when everything is done make sure to add a hook here that hides errors from the client
-
 	$_valid_origins = [
 		"http://localhost:5173" => true // value can be whatever
 	];
@@ -23,7 +21,7 @@
 
 	function handle_cors()
 	{
-		if(GetHeader("Sec-Fetch-Mode") === "cors")
+		if(GetHeader("Sec-Fetch-Mode") === "cors") // sometimes the full request is given right away
 		{
 			$origin = get_cors_origin();
 			if($origin)
@@ -33,7 +31,7 @@
 			}
 		}
 
-		if($_SERVER["REQUEST_METHOD"] === "OPTIONS") // sometimes the full request is given right away
+		if($_SERVER["REQUEST_METHOD"] === "OPTIONS")
 		{
 			ob_clean(); // just incase
 			exit();
@@ -68,7 +66,7 @@
 		handle_errors();
 		handle_cors();
 	}
-
+	
 	enum ResponseType: int
 	{
 		case Success = 0;

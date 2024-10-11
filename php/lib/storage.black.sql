@@ -9,7 +9,8 @@ CREATE TABLE IF NOT EXISTS test (
 
 CREATE TABLE IF NOT EXISTS accounts (
 	id INT PRIMARY KEY AUTO_INCREMENT,
-	account_hash BINARY(32)
+	account_hash BINARY(32) NOT NULL,
+	subscription_id INT NOT NULL
 )
 
 CREATE TABLE IF NOT EXISTS files (

@@ -66,6 +66,21 @@
 		handle_errors();
 		handle_cors();
 	}
+
+	if(function_exists("mb_strlen")) // gotta love php
+	{
+		function ByteStringLength($str)
+		{
+			return mb_strlen($str, "8bit");
+		}
+	}
+	else
+	{
+		function ByteStringLength($str)
+		{
+			return strlen($str);
+		}
+	}
 	
 	enum ResponseType: int
 	{

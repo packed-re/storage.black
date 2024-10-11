@@ -6,20 +6,23 @@
 	RouteSetup();
 
 	//$thing = $tt;
-	echo sprintf("%d<br>", 123);
-	exit();
+	//echo bin2hex(random_bytes(32));
 
-	$token = Session::Make(10)->ToToken();
-	//sleep(9);
+	$account_id = random_bytes(32);
+	echo "start account_id: " . bin2hex($account_id) . "<br><br>";
+	$token = Session::Make(10, $account_id)->ToToken();
+	//sleep(11);
+	echo sprintf("token len: %d <br>", ByteStringLength($token));
 	$session = Session::FromToken($token);
-	
-	$key = $session->encryption_key;
+	echo sprintf("<br>rand_long: %s<br><br>", bin2hex($session->rand_long));
+	$account_id = bin2hex($session->account_id);
 	$data = "hi123";
 
-	echo "key: $key<br>data: $data<br><br>";
+	echo "account_id: $account_id<br>data: $data<br><br>";
 
-	$ciphertext = BasicEncrypt($data, $key);
+	$ciphertext = BasicEncrypt($data, $session->DeriveEncryptionKey());
 	echo "ciphertext: " . ($ciphertext) . "<br>";
-	echo "decrypted: " . BasicDecrypt($ciphertext, $key);
-
+	echo "decrypted: " . BasicDecrypt($ciphertext, $session->DeriveEncryptionKey());
+	echo sprintf("<br><br>expire_date: %d<br>rand_long: %d<br>account_id: %s", $session->expire_date, unpack("Q", $session->rand_long)[1], bin2hex($session->account_id));
+	//var_dump($session);
 ?>

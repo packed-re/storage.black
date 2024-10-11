@@ -8,6 +8,15 @@ RESPONSE SCHEME
 	- variable size data
 
 
+SESSION SCHEME (add check in route for the size of the account id. it has to be exactly 32 bytes)
+end_date + rand_long (8 bytes) + account id (total 48 bytes, without padding)
+enc key - base + ip
+
+enc key derivation scheme - rand_long + account_id + base_enc_key (diff than above) + ip
+
+account id is passed to session api and then discarded clientside. session api sets a HttpOnly cookie and acts as the new account id. doing GET on the route returns expire_date + encryption_key
+
+
 Account is created only once a file is uploaded or once an activation code is used
 
 
@@ -24,9 +33,10 @@ Returns a session token and encryption key for account data.
 POST /file
 (in $_FILES)
 - Access
-	- account_id - 32 bytes 		// (ideally this should be uploaded encrypted with the session encryption key, without padding)
-	- action_type - 1 byte (contains the code of the desired action to take. 0 to get contents, in which case FileContent is not provided, or 1 to upload data)
-			// - session_token - 48 bytes realistically, but should always be sent last so as to leave the possibility of adding data to the session token in the future
+	- action_type - 1 byte (contains the code of the desired action to take. 0 to get contents, in which case FileContent is not provided/ignored, or 1 to upload data)
+	- 7 bytes padding
+	- account_id - 32 bytes (should be uploaded encrypted with the session encryption key, without padding)
+	- session_token - 48 bytes realistically, but should always be sent last so as to leave the possibility of adding data to the session token in the future
 - FileHeader
 	- write_offset - 8 bytes
 	- file_size - 8 bytes

@@ -1,9 +1,9 @@
 <?php
 	require_once("lib/utility.php");
 	require_once("lib/database_interface.php");
-	
+
 	RouteSetup();
-	
+	exit();
  	// NOTE: When the file offset is set above the end of the file, everything between it and that position is nulled out.
 	
 	//var_dump($_POST);

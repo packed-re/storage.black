@@ -131,6 +131,11 @@
 		}
 	}
 
+	function RemoveCookie($name)
+	{
+		setcookie($name, "", 0);
+	}
+
 	function GetAllRequestData()
 	{
 		$out = file_get_contents("php://input");

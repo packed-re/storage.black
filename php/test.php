@@ -7,7 +7,9 @@
 
 	//$thing = $tt;
 	//echo bin2hex(random_bytes(32));
-
+	echo "123";
+	header("buh: hub");
+	exit("bello");
 	$account_id = random_bytes(32);
 	echo "start account_id: " . bin2hex($account_id) . "<br><br>";
 	$token = Session::Make(10, $account_id)->ToToken();

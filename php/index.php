@@ -3,6 +3,7 @@
 	require_once("lib/database_interface.php");
 
 	RouteSetup();
+	var_dump($_FILES);
 	exit();
  	// NOTE: When the file offset is set above the end of the file, everything between it and that position is nulled out.
 	

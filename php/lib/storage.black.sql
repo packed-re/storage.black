@@ -21,7 +21,7 @@ VALUES
 
 CREATE TABLE IF NOT EXISTS activation_keys (
 	id INT PRIMARY KEY AUTO_INCREMENT,
-	code BINARY(16) NOT NULL,
+	code BINARY(16) NOT NULL UNIQUE,
 	subscription_type_id INT NOT NULL,
 
 	FOREIGN KEY (subscription_type_id) REFERENCES subscription_type(id)

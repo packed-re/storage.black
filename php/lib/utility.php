@@ -83,6 +83,21 @@
 			return strlen($str);
 		}
 	}
+
+	if(function_exists("mb_substr")) // gotta love php
+	{
+		function ByteSubString($str, $start, $length = null)
+		{
+			return mb_substr($str, $start, $length, "8bit");
+		}
+	}
+	else
+	{
+		function ByteSubString($str, $start, $length = null)
+		{
+			return substr($str, $start, $length);
+		}
+	}
 	
 	enum ResponseType: int
 	{

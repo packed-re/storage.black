@@ -1,9 +1,19 @@
 <?php
 	require_once($_SERVER["DOCUMENT_ROOT"] . "/lib/utility.php");
 
-	function GetManagedFileName($account_hash, $data_id, $file_data, $file_size)
+	function GetManagedFileName($account_hash, $data_id, $file_data, $file_size) // keep this here and change the name of this file
 	{
 
+	}
+
+	$___db_activation_code_salt = hex2bin("344a9ae07e411b3c1bfb61636bfa717be9641a16055bdae782470c0f8d24b017");
+	function _CreateDBActivationCode($code)
+	{
+		global $___db_activation_code_salt;
+
+		$hash = hash("sha256", $code . $___db_activation_code_salt, true);
+
+		return ByteSubString($hash, 0, 16) ^ ByteSubString($hash, 16, 16);
 	}
 
 	class FileDatabse
@@ -17,12 +27,19 @@
 				ExitResponse(ResponseType::ServerError, CreateSecureResponseData("SQL Conn Failed: " . $this->DB>connect_error));
 		}
 
+		protected function DeleteTableRowByID($table_name, $id)
+		{
+			$this->DB->query("DELETE FROM $table_name WHERE id=$id");
+
+			return $this->DB->affected_rows === 1;
+		}
+
 		public function BlobUpTest($binary_data)
 		{
 			$stmt = $this->DB->prepare("INSERT INTO test(file)
 			                            VALUES (?)");			
 			
-			$stmt->bind_param("b", $binary_data); // even if i upload 5 bytes this dogshit language refuses to send them, so I'm basically forced to always use send_long_data
+			$stmt->bind_param("b", $binary_data);
 			$stmt->send_long_data(0, $binary_data);
 			$stmt->execute();
 		}
@@ -33,43 +50,147 @@
 			       ->fetch_row()[0];
 		}
 
-		public function CreateSubscription($type_id)
+		public function PerformCleanup() // do things like cleaning up dead subscriptions, replacing expired subscriptions with free ones, deleting expired files, etc. Should be called from a single global source.
 		{
-
+			throw "not implemented";
 		}
 
-		public function CreateAcivationCodes($count) // returns as hex. what is stored in the db should be different from what is deemed a valid code - db[id] = hash(actual_code)
-		{
-
-		}
-
-		public function _GetCodeData($code)
+		protected function CreateSubscription($subscription_type_id)
 		{
 			$stmt = $this->DB->prepare("
-				SELECT subscription_type.name, subscription_type.duration, subscription_type.storage FROM activation_keys
-					INNER JOIN subscriptions ON accounts.subscription_id = subscriptions.id
-					INNER JOIN subscription_type ON subscriptions.subscription_type_id = subscription_type.id
-				WHERE accounts.account_hash = ?
-				LIMIT 1
+				INSERT INTO subscriptions (subscription_type_id, expire_date, storage_left)
+				SELECT id, UNIX_TIMESTAMP() + duration, storage
+				FROM subscription_type
+				WHERE id = ?;
 			");			
 		
-			$stmt->bind_param("s", $account_hash);
+			$stmt->bind_param("i", $subscription_type_id);
+			$stmt->execute();
+
+			return $this->DB->affected_rows === 1 ? $this->DB->insert_id : null;
+		}
+
+		protected function CreateSubscriptionByTypeName($type_name)
+		{
+			$stmt = $this->DB->prepare("
+				INSERT INTO subscriptions (subscription_type_id, expire_date, storage_left)
+				SELECT id, UNIX_TIMESTAMP() + duration, storage
+				FROM subscription_type
+				WHERE name = ?;
+			");			
+		
+			$stmt->bind_param("s", $type_name);
+			$stmt->execute();
+
+			return $this->DB->affected_rows === 1 ? $this->DB->insert_id : null;
+		}
+
+		public function ListSubscriptionTypes() // returns id, name, duration, storage. id is used in CreateActivationCodes
+		{
+
+		}
+
+		protected function CreateActivationCodeRaw($code, $subscription_type_id)
+		{
+			$this->DB->query("
+				INSERT INTO activation_keys (code, subscription_type_id) VALUES ($code, $subscription_type_id)
+			");
+
+			return $this->DB->affected_rows === 1;
+		}
+
+		public function CreateActivationCodes($count, $subscription_type_id) // returns as hex. what is stored in the db should be different from what is deemed a valid code - db[id] = hash(actual_code)
+		{			
+			if($count <= 0)
+				return [];
+
+			$codes = [random_bytes(16)];
+			$insert_values = "(\"" . $this->DB->real_escape_string(_CreateDBActivationCode($codes[0])) . "\",$subscription_type_id)";
+
+			for($i = 1; $i < $count; ++$i)
+			{
+				$codes[$i] = random_bytes(16);
+				$insert_values .= ",(\"" . $this->DB->real_escape_string(_CreateDBActivationCode($codes[$i])) . "\",$subscription_type_id)";
+			}
+
+			$insert_values .= ";";
+
+			$this->DB->query("
+				INSERT INTO activation_keys (code, subscription_type_id) VALUES $insert_values
+			");
+
+			if($this->DB->affected_rows !== $count)
+				return null;
+
+			return $codes;
+		}
+
+		protected function GetCodeData($code)
+		{
+			$stmt = $this->DB->prepare("
+				SELECT
+					subscription_type.id,
+					subscription_type.name,
+					subscription_type.duration,
+					subscription_type.storage,
+					activation_keys.subscription_type_id
+				FROM activation_keys
+					INNER JOIN subscription_type ON subscription_type.id = activation_keys.subscription_type_id
+				WHERE activation_keys.code = ?
+				LIMIT 1;
+			");			
+		
+			$stmt->bind_param("s", $code);
 			$stmt->execute();
 
 			return $stmt->get_result()->fetch_assoc();
 		}
 
-		public function ActivateCode($code, $account_hash = null) // expects hex, returns bool. if account_id is -1 it will create a new one IF the code is valid
+		public function ActivateCode($code, $account_hash) // expects binary string, returns bool.
+		{
+			$code_data = $this->GetCodeData($code);
+			if($code_data === null)
+				return false;
+
+			$this->DB->query("
+				DELETE FROM activation_keys WHERE code = \"" . _CreateDBActivationCode($code) . "\"
+				LIMIT 1;
+			");
+
+			if($this->DB->affected_rows === 0)
+				return false;
+			
+			$subscription_id = $this->CreateSubscription($code_data["id"]);
+
+			$stmt = $this->DB->prepare("
+				UPDATE accounts
+				SET subscription_id = ?
+				WHERE account_hash = ?;
+			");			
+			
+			$stmt->bind_param("is", $subscription_id, $account_hash);
+			$stmt->execute();
+
+			if($this->DB->affected_rows === 0) // if this fails remake the code
+			{
+				if($this->CreateAccount($account_hash, $subscription_id) === false)
+				{
+					$this->DeleteTableRowByID("subscriptions", $subscription_id);
+					$this->CreateActivationCodeRaw(_CreateDBActivationCode($code), $code_data["subscription_type_id"]);
+
+					ExitResponse(ResponseType::ServerError, CreateSecureResponseData("failed to create account on code activate"));
+				}
+			}
+
+			return true;
+		}
+
+		public function CreateAccount($account_hash, $subscription_id = null) // get data -> delete code -> create sub. this ensures atomicity
 		{
 
 		}
 
-		public function CreateAccount($account_hash, $subscription_id = 1) // get data -> delete code -> create sub, this ensures atomicity
-		{
-
-		}
-
-		public function TryReserveSpace($account_hash, $amount)
+		protected function TryReserveSpace($account_hash, $amount)
 		{
 			$stmt = $this->DB->prepare("
 				UPDATE accounts
@@ -92,7 +213,7 @@
 					INNER JOIN subscriptions ON accounts.subscription_id = subscriptions.id
 					INNER JOIN subscription_type ON subscriptions.subscription_type_id = subscription_type.id
 				WHERE accounts.account_hash = ?
-				LIMIT 1
+				LIMIT 1;
 			");			
 			
 			$stmt->bind_param("s", $account_hash);
@@ -140,7 +261,7 @@
 			return $this->DB->affected_rows === 1;
 		}
 
-		public function ListFiles($account_hash)
+		public function ListFiles($account_hash) // remake this to also delete old unfinished files
 		{
 			$stmt = $this->DB->prepare("
 				SELECT data_id, file_data, encryption_data, file_size FROM files

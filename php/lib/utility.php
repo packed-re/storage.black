@@ -1,6 +1,8 @@
 <?php
 	require_once($_SERVER["DOCUMENT_ROOT"] . "/lib/crypto.php");
 
+	$_DEBUG = true;
+
 	$_valid_origins = [
 		"http://localhost:5173" => true // value can be whatever
 	];
@@ -43,7 +45,7 @@
 		set_exception_handler(function($throwable){
 			ExitResponse(
 				ResponseType::UnknownServerError,
-				sprintf("Uncaught Exception\n%s: %s\n\nStack Trace:\n%s", get_class($throwable), $throwable->getMessage(), $throwable->getTraceAsString())
+				CreateSecureResponseData(sprintf("Uncaught Exception\n%s: %s\n\nStack Trace:\n%s", get_class($throwable), $throwable->getMessage(), $throwable->getTraceAsString()))
 			);
 		});
 
@@ -56,7 +58,7 @@
 		){
 			ExitResponse(
 				ResponseType::UnknownServerError,
-				sprintf("Uncaught Error (%d) - Line %d of %s\n%s", $errno, $errline, $errfile, $errstr)
+				CreateSecureResponseData(sprintf("Uncaught Error (%d) - Line %d of %s\n%s", $errno, $errline, $errfile, $errstr))
 			);
 		});
 	}
@@ -108,9 +110,13 @@
 
 	function CreateSecureResponseData($data) // for data we want to return to the client without letting it know its contents
 	{
+		global $_DEBUG;
 		global $___response_encryption_key;
 
-		return BasicEncrypt($data, $___response_encryption_key);
+		if($_DEBUG === true)
+			return $data;
+		else
+			return BasicEncrypt($data, $___response_encryption_key);
 	}
 
 	function GetHeader($name)

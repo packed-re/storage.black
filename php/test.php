@@ -2,14 +2,19 @@
 	require_once("lib/crypto.php");
 	require_once("lib/session.php");
 	require_once("lib/utility.php");
+	require_once("lib/database_interface.php");
 
 	RouteSetup();
 
-	//$thing = $tt;
-	//echo bin2hex(random_bytes(32));
-	echo "123";
-	header("buh: hub");
-	exit("bello");
+	$db = new FileDatabse();
+
+	var_dump($db->ListFiles("12345678901234567890123456789012"));
+	var_dump($db->FetchAccountData("12345678901234567890123456789012"));
+	var_dump($db->TryReserveSpace("12345678901234567890123456789012", 10));
+	//$db->RegisterFile();
+	//var_dump($db->FetchAccountID("12345678901234567890123456789012"));
+
+	exit();
 	$account_id = random_bytes(32);
 	echo "start account_id: " . bin2hex($account_id) . "<br><br>";
 	$token = Session::Make(10, $account_id)->ToToken();

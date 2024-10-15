@@ -30,6 +30,9 @@ Returns a session token and encryption key for account data.
 	- encryption_key - 32 bytes
 	- token - atleast 48 bytes
 
+GET /file
+lists them
+
 POST /file
 (in $_FILES)
 - Access
@@ -42,5 +45,23 @@ POST /file
 	- file_size - 8 bytes
 	- encryption_key - 48 bytes (16 (iv) + 32 (enc key)) (this should be uploaded with no padding from the client)
 	- file_data - up to 512 bytes (this is the metadata)
+- FileContent
+	- the raw content thats to be written to disk - variable size
+
+POST /file
+(in $_FILES)
+
+- Meta
+	- Access
+		- action_type - 1 byte (contains the code of the desired action to take. 0 to get contents, in which case FileContent is not provided/ignored, or 1 to upload data)
+		- 7 bytes padding
+			- account_id - 32 bytes (should be uploaded encrypted with the session encryption key, without padding)
+			- session_token - 48 bytes realistically, but should always be sent last so as to leave the possibility of adding data to the session token in the future
+	- FileHeader
+		- write_offset - 8 bytes
+		- file_size - 8 bytes
+		- encryption_key - 48 bytes (16 (iv) + 32 (enc key)) (this should be uploaded with no padding from the client)
+		- data_id - sha256 truncated (through xor) to 16 bytes (128 bit). TODO: Make the client generate (from the base key) and store the data_id for the root folder in localstorage (using session encryption key)
+		- file_data - up to 512 bytes (this is the metadata)
 - FileContent
 	- the raw content thats to be written to disk - variable size

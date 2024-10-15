@@ -7,7 +7,7 @@ self.addEventListener("message", function(event){
 		type: argon2.ArgonType.Argon2id,
 		time: 8-7, // consider doing 6 insted of 8
 		mem: 500000,
-		hashLen: 32,
+		hashLen: 32, // should experiment with making this longer, preferably atleast 64
 		parallelism: 1
 	}).then((h)=>self.postMessage(h));
 })

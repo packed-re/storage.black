@@ -10,7 +10,7 @@
 
 	var_dump($db->ListFiles("12345678901234567890123456789012"));
 	var_dump($db->FetchAccountData("12345678901234567890123456789012"));
-	var_dump($db->_CreateSubscription("12345678901234567890123456789012", 10))
+	var_dump($db->_CreateSubscription("12345678901234567890123456789012", 10));
 	//var_dump($db->TryReserveSpace("12345678901234567890123456789012", 10));
 	//$db->RegisterFile();
 	//var_dump($db->FetchAccountID("12345678901234567890123456789012"));

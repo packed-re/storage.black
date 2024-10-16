@@ -54,6 +54,9 @@
 			if($data === false)
 				return false;
 			
+			if(ByteStringLength($data) !== 48)
+				return false;
+
 			$unpacked_data = unpack("Qexpire_date/a8rand_long/a32account_id", $data);
 
 			if($unpacked_data["expire_date"] <= time())

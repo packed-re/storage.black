@@ -29,7 +29,7 @@
 
 		protected function DeleteTableRowByID($table_name, $id)
 		{
-			$this->DB->query("DELETE FROM $table_name WHERE id=$id");
+			$this->DB->query("DELETE FROM $table_name WHERE id=$id;");
 
 			return $this->DB->affected_rows === 1;
 		}
@@ -85,15 +85,29 @@
 			return $this->DB->affected_rows === 1 ? $this->DB->insert_id : null;
 		}
 
+		protected function SetAccountSubscriptionID($account_hash, $subscription_id)
+		{
+			$stmt = $this->DB->prepare("
+				UPDATE accounts
+				SET subscription_id = ?
+				WHERE account_hash = ?;
+			");			
+			
+			$stmt->bind_param("is", $subscription_id, $account_hash);
+			$stmt->execute();
+
+			return $this->DB->affected_rows === 1;
+		}
+
 		public function ListSubscriptionTypes() // returns id, name, duration, storage. id is used in CreateActivationCodes
 		{
 
 		}
 
-		protected function CreateActivationCodeRaw($code, $subscription_type_id)
+		protected function InsertActivationCodeRaw($code, $subscription_type_id)
 		{
 			$this->DB->query("
-				INSERT INTO activation_keys (code, subscription_type_id) VALUES ($code, $subscription_type_id)
+				INSERT INTO activation_keys (code, subscription_type_id) VALUES (\"" . $this->DB->real_escape_string($code) . "\", $subscription_type_id)
 			");
 
 			return $this->DB->affected_rows === 1;
@@ -125,9 +139,9 @@
 			return $codes;
 		}
 
-		protected function GetCodeData($code)
+		public function GetCodeData($code)
 		{
-			$stmt = $this->DB->prepare("
+			return $this->DB->query("
 				SELECT
 					subscription_type.id,
 					subscription_type.name,
@@ -136,47 +150,55 @@
 					activation_keys.subscription_type_id
 				FROM activation_keys
 					INNER JOIN subscription_type ON subscription_type.id = activation_keys.subscription_type_id
-				WHERE activation_keys.code = ?
+				WHERE activation_keys.code = \"" . $this->DB->real_escape_string(_CreateDBActivationCode($code)) . "\"
 				LIMIT 1;
-			");			
-		
-			$stmt->bind_param("s", $code);
-			$stmt->execute();
-
-			return $stmt->get_result()->fetch_assoc();
+			")->fetch_assoc();
 		}
 
-		public function ActivateCode($code, $account_hash) // expects binary string, returns bool.
+		public function ExtendSubscriptionDuration($account_hash, $amount) // make sure the type ids match before doing this
 		{
-			$code_data = $this->GetCodeData($code);
-			if($code_data === null)
-				return false;
+			$stmt = $this->DB->prepare("
+				UPDATE accounts
+					INNER JOIN subscriptions ON subscriptions.id = accounts.subscription_id
+				SET subscriptions.expire_date = subscriptions.expire_date + ?
+				WHERE accounts.account_hash = ?
+				LIMIT 1;
+			");			
+			
+			$stmt->bind_param("is", $amount, $account_hash);
+			$stmt->execute();
+
+			return $this->DB->affected_rows === 1;
+		}
+
+		public function ActivateCode($code, $account_hash) // expects binary string and the key to be valid (through GetCodeData). false if key couldnt be found, true if it was applied
+		{
+			//$code_data = $this->GetCodeData($code);
+			//if($code_data === null)
+			//	return false;
 
 			$this->DB->query("
-				DELETE FROM activation_keys WHERE code = \"" . _CreateDBActivationCode($code) . "\"
+				DELETE FROM activation_keys WHERE code = \"" . $this->DB->real_escape_string(_CreateDBActivationCode($code)) . "\"
 				LIMIT 1;
 			");
 
 			if($this->DB->affected_rows === 0)
 				return false;
-			
+
 			$subscription_id = $this->CreateSubscription($code_data["id"]);
 
-			$stmt = $this->DB->prepare("
-				UPDATE accounts
-				SET subscription_id = ?
-				WHERE account_hash = ?;
-			");			
-			
-			$stmt->bind_param("is", $subscription_id, $account_hash);
-			$stmt->execute();
+			if($subscription_id === null)
+			{
+				$this->InsertActivationCodeRaw(_CreateDBActivationCode($code), $code_data["subscription_type_id"]);
+				ExitResponse(ResponseType::ServerError, CreateSecureResponseData("failed to create subscription"));
+			}
 
-			if($this->DB->affected_rows === 0) // if this fails remake the code
+			if($this->SetAccountSubscriptionID($account_hash, $subscription_id) === false)
 			{
 				if($this->CreateAccount($account_hash, $subscription_id) === false)
 				{
 					$this->DeleteTableRowByID("subscriptions", $subscription_id);
-					$this->CreateActivationCodeRaw(_CreateDBActivationCode($code), $code_data["subscription_type_id"]);
+					$this->InsertActivationCodeRaw(_CreateDBActivationCode($code), $code_data["subscription_type_id"]);
 
 					ExitResponse(ResponseType::ServerError, CreateSecureResponseData("failed to create account on code activate"));
 				}
@@ -185,12 +207,19 @@
 			return true;
 		}
 
-		public function CreateAccount($account_hash, $subscription_id = null) // get data -> delete code -> create sub. this ensures atomicity
+		public function CreateAccount($account_hash, $subscription_id) // get data -> delete code -> create sub. this ensures atomicity
 		{
+			$stmt = $this->DB->prepare("
+				INSERT INTO accounts (account_hash, subscription_id) VALUES (?, ?);
+			");
 
+			$stmt->bind_param("si", $account_hash, $subscription_id);
+			$stmt->execute();
+
+			return $this->DB->affected_rows === 1;
 		}
 
-		protected function TryReserveSpace($account_hash, $amount)
+		public function TryReserveSpace($account_hash, $amount)
 		{
 			$stmt = $this->DB->prepare("
 				UPDATE accounts
@@ -222,7 +251,7 @@
 			return $stmt->get_result()->fetch_assoc();
 		}
 
-		public function RegisterFile($account_hash, $data_id, $file_data, $encryption_data, $file_size, $__call_depth = 0) // create account if one doesnt exist
+		public function RegisterFile($account_hash, $data_id, $file_data, $encryption_data, $file_size, $__call_depth = 0) // allocate space with TryReserveSpace ahead of time
 		{
 			$stmt = $this->DB->prepare("
 				INSERT INTO files (account_id, data_id, file_data, encryption_data, finished_writing)

@@ -38,7 +38,7 @@ CREATE TABLE IF NOT EXISTS subscriptions (
 
 CREATE TABLE IF NOT EXISTS accounts (
 	id INT PRIMARY KEY AUTO_INCREMENT,
-	account_hash BINARY(32) NOT NULL,
+	account_hash BINARY(32) NOT NULL UNIQUE,
 	subscription_id INT NOT NULL UNIQUE,
 	
 	FOREIGN KEY (subscription_id) REFERENCES subscriptions(id)

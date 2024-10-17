@@ -3,7 +3,10 @@
 
 	RouteSetup();
 
-	echo file_get_contents("test2.php", false, null, 4);
+	$file_handle = fopen("test_file.txt", "xb");
+	fseek($file_handle, 2);
+	echo fwrite($file_handle, "12");
+	fclose($file_handle);
 	echo GetManagedFileName("asdgadsg", "dasdgasdgasd", "agdgadfg", "asdfadsf", 123);
 	//var_dump(unpack("x6/Ctest", pack("x6C", 61)));
 	/*$db = new FileDatabse();

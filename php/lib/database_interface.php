@@ -65,7 +65,7 @@
 			return $this->DB->affected_rows === 1 ? $this->DB->insert_id : null;
 		}
 
-		protected function CreateSubscriptionByTypeName($type_name)
+		public function CreateSubscriptionByTypeName($type_name)
 		{
 			$stmt = $this->DB->prepare("
 				INSERT INTO subscriptions (subscription_type_id, expire_date, storage_left)
@@ -202,8 +202,11 @@
 			return true;
 		}
 
-		public function CreateAccount($account_hash, $subscription_id) // get data -> delete code -> create sub. this ensures atomicity
+		public function CreateAccount($account_hash, $subscription_id = -1) // get data -> delete code -> create sub. this ensures atomicity
 		{
+			if($subscription_id === -1)
+				$subscription_id = $db->CreateSubscriptionByTypeName("free");
+
 			$stmt = $this->DB->prepare("
 				INSERT INTO accounts (account_hash, subscription_id) VALUES (?, ?);
 			");
@@ -212,6 +215,34 @@
 			$stmt->execute();
 
 			return $this->DB->affected_rows === 1;
+		}
+
+		public function AccountExists($account_hash)
+		{
+			$stmt = $this->DB->prepare("
+				SELECT id FROM accounts WHERE account_hash = ? LIMIT 1;
+			");
+
+			$stmt->bind_param("s", $account_hash);
+			$stmt->execute();
+
+			return $stmt->get_result()->num_rows === 1;
+		}
+		
+		public function FetchAccountData($account_hash)
+		{
+			$stmt = $this->DB->prepare("
+				SELECT subscriptions.expire_date, subscriptions.storage_left, subscription_type.storage as storage_max FROM accounts
+					INNER JOIN subscriptions ON accounts.subscription_id = subscriptions.id
+					INNER JOIN subscription_type ON subscriptions.subscription_type_id = subscription_type.id
+				WHERE accounts.account_hash = ?
+				LIMIT 1;
+			");			
+			
+			$stmt->bind_param("s", $account_hash);
+			$stmt->execute();
+
+			return $stmt->get_result()->fetch_assoc();
 		}
 
 		public function TryReserveSpace($account_hash, $amount)
@@ -230,22 +261,6 @@
 			return $this->DB->affected_rows === 1;
 		}
 
-		public function FetchAccountData($account_hash)
-		{
-			$stmt = $this->DB->prepare("
-				SELECT subscriptions.expire_date, subscriptions.storage_left, subscription_type.storage as storage_max FROM accounts
-					INNER JOIN subscriptions ON accounts.subscription_id = subscriptions.id
-					INNER JOIN subscription_type ON subscriptions.subscription_type_id = subscription_type.id
-				WHERE accounts.account_hash = ?
-				LIMIT 1;
-			");			
-			
-			$stmt->bind_param("s", $account_hash);
-			$stmt->execute();
-
-			return $stmt->get_result()->fetch_assoc();
-		}
-
 		public function RegisterFile($account_hash, $data_id, $file_data, $encryption_data, $file_size, $__call_depth = 0) // allocate space with TryReserveSpace ahead of time
 		{
 			$stmt = $this->DB->prepare("
@@ -257,12 +272,14 @@
 			$stmt->bind_param("ssssi", $data_id, $file_data, $encryption_data, $account_hash, $file_size);
 			$stmt->execute();
 
+			return $this->DB->affected_rows === 1;
+
 			if($this->DB->affected_rows === 0) // if no account exists with given account hash
 			{
 				if($__call_depth > 0)
 					ExitResponse(ResponseType::ServerError, CreateSecureResponseData("call depth exceeded in RegisterFile"));
 
-				$this->CreateAccount($account_hash);
+				$this->CreateAccount($account_hash, 000);
 				return $this->RegisterFile($account_hash, $data_id, $file_data, $file_size, $encryption_data, $__call_depth + 1);
 			}
 			else

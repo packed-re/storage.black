@@ -65,4 +65,33 @@
 			return new Session($unpacked_data["expire_date"], $unpacked_data["rand_long"], $unpacked_data["account_id"]);
 		}
 	}
+
+	function HandleSession()
+	{
+		if(!isset($_COOKIE["session"]))
+			ExitResponse(
+				ResponseType::SessionExpired
+			);
+			
+		$session_decoded = base64_decode($_COOKIE["session"]);
+		if($session_decoded === false || ByteStringLength($session_decoded) !== Session::GetTokenLength())
+		{
+			RemoveCookie("session");
+
+			ExitResponse(
+				ResponseType::SessionExpired // to be safe, we shouldn't give the client too much information about the state of the server
+			);
+		}
+
+		$session = Session::FromToken($session_decoded);
+		if($session !== false)
+		{
+			return $session;
+		}
+		else
+		{
+			RemoveCookie("session");				
+			ExitResponse(ResponseType::SessionExpired);
+		}
+	}
 ?>

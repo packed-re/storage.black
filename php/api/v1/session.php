@@ -22,18 +22,12 @@
 				);
 			
 			$session_decoded = base64_decode($_COOKIE["session"]);
-			if($session_decoded === false)
-				ExitResponse(
-					ResponseType::BadArgument,
-					"failed to decode session token"
-				);
-
-			if(ByteStringLength($session_decoded) !== Session::GetTokenLength())
+			if($session_decoded === false || ByteStringLength($session_decoded) !== Session::GetTokenLength())
 			{
-				// delete the cookie
+				RemoveCookie("session");
 
 				ExitResponse(
-					ResponseType::SessionExpired // to be safe, we shouldn't give the client too much information about the state of the server or the format of the token
+					ResponseType::SessionExpired // to be safe, we shouldn't give the client too much information about the state of the server
 				);
 			}
 
@@ -44,7 +38,7 @@
 			}
 			else
 			{
-				// delete the cookie
+				RemoveCookie("session");				
 				ExitResponse(ResponseType::SessionExpired);
 			}
 
@@ -70,6 +64,12 @@
 				);
 
 			$account_id_decoded = base64_decode($request_data["account_id"]);
+			if($account_id_decoded === false)
+				ExitResponse(
+					ResponseType::BadArgument,
+					"account_id is invalid"
+				);
+
 			if(ByteStringLength($account_id_decoded) !== 32)
 				ExitResponse(
 					ResponseType::BadArgument,

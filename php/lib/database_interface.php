@@ -1,11 +1,6 @@
 <?php
 	require_once($_SERVER["DOCUMENT_ROOT"] . "/lib/utility.php");
 
-	function GetManagedFileName($account_hash, $data_id, $file_data, $file_size) // keep this here and change the name of this file
-	{
-
-	}
-
 	$___db_activation_code_salt = hex2bin("344a9ae07e411b3c1bfb61636bfa717be9641a16055bdae782470c0f8d24b017");
 	function _CreateDBActivationCode($code)
 	{
@@ -262,7 +257,7 @@
 			$stmt->bind_param("ssssi", $data_id, $file_data, $encryption_data, $account_hash, $file_size);
 			$stmt->execute();
 
-			if($this->DB->affected_rows === 0)
+			if($this->DB->affected_rows === 0) // if no account exists with given account hash
 			{
 				if($__call_depth > 0)
 					ExitResponse(ResponseType::ServerError, CreateSecureResponseData("call depth exceeded in RegisterFile"));

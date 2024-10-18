@@ -2,17 +2,6 @@
 	require_once($_SERVER["DOCUMENT_ROOT"] . "/lib/utility.php");
 	require_once($_SERVER["DOCUMENT_ROOT"] . "/lib/database_interface.php");
 
-	$___name_hash_salt = hex2bin("a2c90fe3dfab12c3799ad5a0b2b7e355");
-
-	function GetManagedFileName($account_hash, $data_id, $file_data, $encryption_data, $file_size) // keep this here and change the name of this file
-	{
-		global $___name_hash_salt;
-
-		$name_hash = hash("sha256", $data_id . $file_data . $encryption_data . $file_size);
-
-		return $_SERVER["DOCUMENT_ROOT"] . "/files/" . hash("sha256", bin2hex(ByteSubString($name_hash, 0, 16) ^ ByteSubString($name_hash, 16)));
-	}
-
 	class FileHeader
 	{
 		public $action; // int

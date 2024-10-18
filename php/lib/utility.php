@@ -99,6 +99,11 @@
 		}
 	}
 	
+	function MYSQLMakeString($mysqli, $str) // got tired of adding escaped quotes
+	{
+		return "\"" . $mysqli->real_escape_string($str) . "\"";
+	}
+
 	enum ResponseType: int
 	{
 		case Success = 0;
@@ -109,17 +114,6 @@
 		case FileAllocationFailed = 5;
 		case ServerError = 6;
 		case UnknownServerError = 7;
-	}
-
-	function CreateResponse($responseType, $data=null) // data is expected to be a string
-	{
-		return pack("Ca*", $responseType->value, $data);
-	}
-
-	function ExitResponse($responseType, $data = null)
-	{
-		ob_clean();
-		exit(CreateResponse($responseType, $data));
 	}
 
 	$___response_encryption_key = hex2bin("98b32fc776e8497d26f594d02eed92746eb1adc8f77fb6ca1cf8674e38bf6a77");
@@ -133,6 +127,17 @@
 			return $data;
 		else
 			return BasicEncrypt($data, $___response_encryption_key);
+	}
+
+	function CreateResponse($responseType, $data=null, $secure_response_data = false) // data is expected to be a string
+	{
+		return pack("Ca*", $responseType->value, $secure_response_data ? CreateSecureResponseData($data) : $data);
+	}
+
+	function ExitResponse($responseType, $data = null, $secure_response_data = false)
+	{
+		ob_clean();
+		exit(CreateResponse($responseType, $data, $secure_response_data));
 	}
 
 	function GetHeader($name)

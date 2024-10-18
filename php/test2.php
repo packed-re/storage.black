@@ -3,11 +3,24 @@
 
 	RouteSetup();
 
-	$file_handle = fopen("test_file.txt", "xb");
-	fseek($file_handle, 2);
-	echo fwrite($file_handle, "12");
-	fclose($file_handle);
-	echo GetManagedFileName("asdgadsg", "dasdgasdgasd", "agdgadfg", "asdfadsf", 123);
+	$db = new FileDatabse();
+	$db->DeleteUnfinishedFiles();
+
+	$stmt = $db->DB->prepare("
+		SELECT accounts.account_hash, files.data_id, files.file_data, files.encryption_data, files.file_size, files.finished_writing FROM files
+		INNER JOIN accounts ON accounts.id = files.account_id
+		WHERE files.finished_writing = 0
+	");
+
+	$stmt->execute();
+
+	$rows = $stmt->get_result()->fetch_all(MYSQLI_ASSOC);
+	$rowCount = count($rows);
+	echo "in manual<br>\n";
+	for($i = 0; $i < $rowCount; ++$i)
+	{
+		echo sprintf("%s<br>", GetManagedFileName($rows[$i]["account_hash"], $rows[$i]["data_id"], $rows[$i]["file_data"], $rows[$i]["encryption_data"], $rows[$i]["file_size"]));
+	}
 	//var_dump(unpack("x6/Ctest", pack("x6C", 61)));
 	/*$db = new FileDatabse();
 

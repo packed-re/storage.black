@@ -1,11 +1,11 @@
 <?php
-	require_once("lib/crypto.php");
-	require_once("lib/session.php");
-	require_once("lib/utility.php");
-	require_once("lib/database_interface.php");
+	require_once("../lib/crypto.php");
+	require_once("../lib/session.php");
+	require_once("../lib/utility.php");
+	require_once("../lib/database.php");
 
 	RouteSetup();
-
+	exit();
 	$db = new FileDatabse();
 
 	var_dump($db->AccountExists("12345678901234567890123456789011"));

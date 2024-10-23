@@ -1,22 +1,5 @@
 <?php
-	require_once($_SERVER["DOCUMENT_ROOT"] . "/lib/utility.php");
-	
-
-	$___name_hash_salt = hex2bin("a2c90fe3dfab12c3799ad5a0b2b7e355");
-
-	function GetManagedFileNameFromHash($hash) // we use this in DeleteUnfinishedFiles
-	{
-		return $_SERVER["DOCUMENT_ROOT"] . "/files/" . bin2hex(ByteSubString($hash, 0, 16) ^ ByteSubString($hash, 16));
-	}
-
-	function GetManagedFileName($account_hash, $data_id, $file_data, $encryption_data, $file_size)
-	{
-		global $___name_hash_salt;
-
-		return GetManagedFileNameFromHash(
-			hash("sha256", $account_hash . $data_id . $file_data . $encryption_data . $file_size . $___name_hash_salt)
-		);
-	}
+	require_once($_SERVER["DOCUMENT_ROOT"] . "/../lib/utility.php");
 
 	$___db_activation_code_salt = hex2bin("344a9ae07e411b3c1bfb61636bfa717be9641a16055bdae782470c0f8d24b017");
 
@@ -29,7 +12,7 @@
 		return ByteSubString($hash, 0, 16) ^ ByteSubString($hash, 16, 16);
 	}
 
-	class FileDatabse
+	class Database
 	{
 		protected $DB;
 
@@ -37,12 +20,12 @@
 		{
 			$this->DB = new mysqli("localhost", "root", "", "storage.black");
 			if ($this->DB->connect_error)
-				ExitResponse(ResponseType::ServerError, "SQL Conn Failed: " . $this->DB>connect_error, true);
+				ExitResponse(ResponseType::ServerError, "SQL Conn Failed: " . $this->DB->connect_error, true);
 		}
 
 		protected function DeleteTableRowByID($table_name, $id)
 		{
-			$this->DB->query("DELETE FROM $table_name WHERE id=$id;");
+			$this->DB->query("DELETE FROM $table_name WHERE id=$id LIMIT 1;");
 
 			return $this->DB->affected_rows === 1;
 		}
@@ -63,39 +46,9 @@
 			       ->fetch_row()[0];
 		}
 
-		protected function DeleteUnfinishedFiles($account_hash = null, $data_id = null) // null for either param means itll be disregarded in the WHERE clause
-		{
-			global $___name_hash_salt;
-
-			$rows = $this->DB->query("
-				SELECT 
-				SHA2(
-					CONCAT(
-						accounts.account_hash,
-						files.data_id,
-						files.file_data,
-						files.encryption_data,
-						files.file_size,
-						" . MYSQLMakeString($this->DB, $___name_hash_salt) . "
-					), 256),
-					files.file_size
-				FROM accounts
-				INNER JOIN files ON files.account_id = accounts.id
-				WHERE " . ($account_hash !== null ? "accounts.account_hash = " . MYSQLMakeString($this->DB, $account_hash) . " AND " : "") .
-				          ($data_id !== null ? "files.data_id = " . MYSQLMakeString($this->DB, $data_id) . " AND " : "") .
-						  "files.finished_writing = 0
-			")->fetch_all(MYSQLI_NUM);
-
-			$rowCount = count($rows);
-			for($i = 0; $i < $rowCount; ++$i)
-			{
-				echo sprintf("%s<br>", GetManagedFileNameFromHash($rows[$i][0]));
-			}
-		}
-
 		public function PerformCleanup() // do things like cleaning up dead subscriptions, replacing expired subscriptions with free ones, deleting expired files, etc. Should be called from a single global source.
 		{
-			throw "not implemented";
+			throw new Exception("not implemented");
 		}
 
 		protected function CreateSubscription($subscription_type_id)
@@ -161,9 +114,12 @@
 
 		protected function InsertActivationCodeRaw($code, $subscription_type_id)
 		{
-			$this->DB->query("
-				INSERT INTO activation_keys (code, subscription_type_id) VALUES (" .  MYSQLMakeString($this->DB, $code) . ", $subscription_type_id)
+			$stmt = $this->DB->prepare("
+				INSERT INTO activation_keys (code, subscription_type_id) VALUES (?, ?)
 			");
+
+			$stmt->bind_param("si", $code, $subscription_type_id);
+			$stmt->execute();
 
 			return $this->DB->affected_rows === 1;
 		}
@@ -227,10 +183,11 @@
 
 		public function RedeemCode($account_hash, $code) // expects binary string and the key to be valid (through GetCodeData). false if key couldnt be found, true if it was applied
 		{
-			// this system is bad. change this asap
-
-			$code_data = $this->GetCodeData($code); //did this because we'll be calling it externally anyway for ExtendSubscriptionDuration
+			$code_data = $this->GetCodeData($code); // subscription_type_id, name, duration, storage
 			if($code_data === null)
+				return false;
+
+			if($code_data["name"] === "free")
 				return false;
 
 			$this->DB->query("
@@ -240,36 +197,56 @@
 
 			if($this->DB->affected_rows === 0)
 				return false;
-
-			if($code_data["name"] !== "free")
-				return $this->ExtendSubscriptionDuration($account_hash, $code_data["duration"]);
+			
+			$account = $this->FetchAccountData($account_hash);
+			if($account !== null)
+			{
+				if($account["subscription_type_id"] === $code_data["subscription_type_id"])
+					return $this->ExtendSubscriptionDuration($account_hash, $code_data["duration"]);
+				else
+					throw new Exception("Given code has a different subscription than account. Unsubscribe and try again.");
+			}
 
 			$subscription_id = $this->CreateSubscription($code_data["subscription_type_id"]);
-
 			if($subscription_id === null)
 			{
 				$this->InsertActivationCodeRaw(_CreateDBActivationCode($code), $code_data["subscription_type_id"]);
 				ExitResponse(ResponseType::ServerError, "failed to create subscription", true);
 			}
+			
+			if($account === null)
+			{
+				if($this->CreateAccount($account_hash, $subscription_id) === false)
+					ExitResponse(ResponseType::ServerError, "failed to create account on code activate", true);
+			}
 
 			if($this->SetAccountSubscriptionID($account_hash, $subscription_id) === false)
 			{
-				if($this->CreateAccount($account_hash, $subscription_id) === false)
-				{
-					$this->DeleteTableRowByID("subscriptions", $subscription_id);
-					$this->InsertActivationCodeRaw(_CreateDBActivationCode($code), $code_data["subscription_type_id"]);
+				$this->DeleteTableRowByID("subscriptions", $subscription_id); // if possible
+				$this->InsertActivationCodeRaw(_CreateDBActivationCode($code), $code_data["subscription_type_id"]);
 
-					ExitResponse(ResponseType::ServerError, "failed to create account on code activate", true);
-				}
+				ExitResponse(ResponseType::ServerError, "failed to set subscription id of account - " . bin2hex($account_hash), true);
 			}
 
 			return true;
 		}
 
+		public function RedeemCodeFinal($account_hash, $code) // this system is ugly, consider changing it somehow
+		{
+			try
+			{
+				return $this->RedeemCode($account_hash, $code);
+			}
+			catch (Exception $e)
+			{
+				ExitResponse(ResponseType::BadArgument, $e->message);
+			}
+		}
+
 		public function CreateAccount($account_hash, $subscription_id = -1) // get data -> delete code -> create sub. this ensures atomicity
 		{
 			if($subscription_id === -1)
-				$subscription_id = $db->CreateSubscriptionByTypeName("free") ?? ExitRespones(ResponseType::ServerError, );
+				$subscription_id = $this->CreateSubscriptionByTypeName("free") ?? ExitResponse(ResponseType::ServerError, "Failed to create subscription.", true);
 
 			$stmt = $this->DB->prepare("
 				INSERT INTO accounts (account_hash, subscription_id) VALUES (?, ?);
@@ -296,7 +273,7 @@
 		public function FetchAccountData($account_hash)
 		{
 			$stmt = $this->DB->prepare("
-				SELECT subscriptions.expire_date, subscriptions.storage_left, subscription_type.storage as storage_max, subscriptions.subscription_type_id as,  FROM accounts
+				SELECT subscriptions.expire_date, subscriptions.storage_left, subscription_type.storage as storage_max, subscriptions.subscription_type_id,  FROM accounts
 					INNER JOIN subscriptions ON accounts.subscription_id = subscriptions.id
 					INNER JOIN subscription_type ON subscriptions.subscription_type_id = subscription_type.id
 				WHERE accounts.account_hash = ?
@@ -314,12 +291,21 @@
 			$stmt = $this->DB->prepare("
 				UPDATE accounts
 					INNER JOIN subscriptions ON subscriptions.id = accounts.subscription_id
-				SET subscriptions.storage_left = IF(subscriptions.storage_left >= ? AND subscriptions.expire_date > UNIX_TIMESTAMP(), subscriptions.storage_left - ?, subscriptions.storage_left)
+					INNER JOIN subscription_type ON subscription_type.id = subscriptions.subscription_type_id
+				SET
+					subscriptions.storage_left =
+						IF(
+							subscriptions.storage_left >= ?
+								AND subscriptions.expire_date > UNIX_TIMESTAMP()
+								AND subscription_type.storage >= (subscriptions.storage_left - ?) ,
+							subscriptions.storage_left - ?,
+							subscriptions.storage_left
+						)
 				WHERE accounts.account_hash = ?
 				LIMIT 1;
 			");			
 			
-			$stmt->bind_param("iis", $amount, $amount, $account_hash);
+			$stmt->bind_param("iiis", $amount, $amount, $amount, $account_hash);
 			$stmt->execute();
 
 			return $this->DB->affected_rows === 1;
@@ -328,12 +314,12 @@
 		public function RegisterFile($account_hash, $data_id, $file_data, $encryption_data, $file_size, $__call_depth = 0) // allocate space with TryReserveSpace ahead of time
 		{
 			$stmt = $this->DB->prepare("
-				INSERT INTO files (account_id, data_id, file_data, encryption_data, finished_writing)
-					SELECT id, ?, ?, ?, 0 FROM accounts
+				INSERT INTO files (account_id, data_id, file_data, encryption_data, file_size, finished_writing)
+					SELECT id, ?, ?, ?, ?, 0 FROM accounts
 						WHERE account_hash = ?;
 			");
 
-			$stmt->bind_param("ssssi", $data_id, $file_data, $encryption_data, $account_hash, $file_size);
+			$stmt->bind_param("sssis", $data_id, $file_data, $encryption_data, $file_size, $account_hash);
 			$stmt->execute();
 
 			return $this->DB->affected_rows === 1;
@@ -348,6 +334,24 @@
 			}
 			else
 				return true;
+		}
+
+		protected function UnregisterFile($account_hash, $data_id, $file_data, $encryption_data, $file_size)
+		{
+			$stmt = $this->DB->prepare("
+				DELETE FROM files (account_id, data_id, file_data, encryption_data, finished_writing)
+				WHERE data_id = ? AND file_data = ? AND encryption_data = ? AND file_size = ? AND account_id =
+					(
+						SELECT id
+						FROM accounts
+						WHERE account_hash = ?
+					);
+			");
+
+			$stmt->bind_param("sssis", $data_id, $file_data, $encryption_data, $file_size, $account_hash);
+			$stmt->execute();
+
+			return $this->DB->affected_rows === 1;
 		}
 
 		public function FinishFileUpload($account_hash, $data_id, $file_data, $encryption_data, $file_size)
@@ -394,8 +398,6 @@
 					"size" => $rows[$i]["file_size"]
 				];
 			}
-
-			$this->DeleteUnfinishedFiles($account_hash);
 
 			return $out;
 		}

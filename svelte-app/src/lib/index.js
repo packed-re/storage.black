@@ -262,8 +262,11 @@ let _AccountIDSalt = CryptoJS.enc.Hex.parse("5d54dfe28d8adb0a63fff0e518db2bed2ea
 let _MasterKeySalt = CryptoJS.enc.Hex.parse("170a3530f5d5bde9156e86a539b1b7500b40b6a7caa163e0f819f2ce9745adb8");
 
 // Use this only when the page has loaded
-function GenerateBaseKey(pass, callback)
+function GenerateBaseKey(pass)
 {
+	let resolver;
+	let promise = new Promise((resolve) => resolver = resolve);
+
 	let argon2_worker = new Worker("/argon2_worker.js"); // realistically this is only going to get called once, and if not, we should be allowed to generate several keys simultaneously
 
 	argon2_worker.postMessage({
@@ -272,9 +275,11 @@ function GenerateBaseKey(pass, callback)
 	});
 
 	argon2_worker.addEventListener("message", function(event){
-		callback(event.data);
+		resolver(event.data);
 		argon2_worker.terminate();
 	})
+
+	return promise;
 }
 
 function GenerateAccountID(base_key)
@@ -296,7 +301,6 @@ function GenerateIV()
 function ShortEncrypt(data, key, padding = CryptoJS.pad.Pkcs7) // key is a WordArrays. data should be able to be both a WordArray and a string
 {
 	let iv = GenerateIV();
-	console.log("encr started")
 
 	let ciphertext = CryptoJS.AES.encrypt(data, key, {
 		mode: CryptoJS.mode.CBC,
@@ -352,6 +356,18 @@ function ShortDecrypt(data, key, iv, padding = CryptoJS.pad.Pkcs7) // everything
 	});
 
 	return plaintext;
+}
+
+function CombineCipherIV(encr_object)
+{
+	return encr_object.output.concat(encr_object.iv);
+}
+
+function ChopCipherIV(cipher)
+{
+	let iv = SliceWordArray(cipher, cipher.sigBytes-16);
+	ChopWordArray(cipher, 0, cipher.sigBytes-16);
+	return iv;
 }
 
 class Encryptor
@@ -489,6 +505,8 @@ export {
 	GenerateIV,
 	ShortEncrypt,
 	ShortDecrypt,
+	CombineCipherIV,
+	ChopCipherIV,
 	Encryptor,
 	Decryptor
 };

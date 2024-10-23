@@ -1,5 +1,5 @@
 <?php
-	require_once($_SERVER["DOCUMENT_ROOT"] . "/lib/crypto.php");
+	require_once($_SERVER["DOCUMENT_ROOT"] . "/../lib/crypto.php");
 
 	$_DEBUG = true;
 
@@ -30,6 +30,8 @@
 			{
 				header("Access-Control-Allow-Origin: " . $origin);
 				header("Access-Control-Max-Age: 7200");
+				header("Access-Control-Allow-Credentials: true");
+				header("Access-Control-Allow-Methods: GET, POST, DELETE");
 			}
 		}
 
@@ -109,11 +111,12 @@
 		case Success = 0;
 		case MissingArgument = 1;
 		case BadArgument = 2;
-		case SessionExpired = 3;
+		case BadRequest = 3;
 		case BadRequestMethod = 4;
-		case FileAllocationFailed = 5;
-		case ServerError = 6;
-		case UnknownServerError = 7;
+		case SessionExpired = 5;
+		case FileAllocationFailed = 6;
+		case ServerError = 7;
+		case UnknownServerError = 8;
 	}
 
 	$___response_encryption_key = hex2bin("98b32fc776e8497d26f594d02eed92746eb1adc8f77fb6ca1cf8674e38bf6a77");

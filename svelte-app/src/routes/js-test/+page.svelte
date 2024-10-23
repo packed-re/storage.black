@@ -1,7 +1,19 @@
 <script>
-  	import { onMount } from "svelte";
+	import { CryptoJS, Uint8ArrayToWordArray } from "$lib";
+	import { onMount } from "svelte";
+	import { CheckSession, CreateSession, FetchEncryptionKey, ClearSession } from "$lib/session"
 
 	onMount(function(){
+		console.log(CheckSession());
+		CreateSession(CryptoJS.lib.WordArray.random(32).toString(CryptoJS.enc.Base64)).then(function(v){
+			console.log("c1", v.toString(CryptoJS.enc.Hex));			
+			console.log(CheckSession());
+			FetchEncryptionKey().then(function(v){
+				console.log("c2", v.toString(CryptoJS.enc.Hex))
+				//ClearSession();
+			});
+		});
+		return;
 		let formData = new FormData()
 		formData.append("buh", "123");
 		formData.append("this is a file", new Blob(["123"]), "realest_file.bin");

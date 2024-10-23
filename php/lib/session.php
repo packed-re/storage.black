@@ -1,6 +1,6 @@
 <?php
-	require_once($_SERVER["DOCUMENT_ROOT"] . "/lib/crypto.php");
-	require_once($_SERVER["DOCUMENT_ROOT"] . "/lib/utility.php");
+	require_once($_SERVER["DOCUMENT_ROOT"] . "/../lib/crypto.php");
+	require_once($_SERVER["DOCUMENT_ROOT"] . "/../lib/utility.php");
 
 	$___master_key = hash("sha256", hex2bin("47d2eebb1a90cd2980c51bec19981b82fb2af20e4b8cbe4159ed6dbb148da834") . $_SERVER["REMOTE_ADDR"], true);
 	$___derived_base_key = hex2bin("5e771cd8f433435bea05d3cfca06a9fab370988ca89bfd1b688da4be0cfefc79");
@@ -73,7 +73,7 @@
 				ResponseType::SessionExpired
 			);
 			
-		$session_decoded = base64_decode($_COOKIE["session"]);
+		$session_decoded = base64_decode($_COOKIE["session"], true);
 		if($session_decoded === false || ByteStringLength($session_decoded) !== Session::GetTokenLength())
 		{
 			RemoveCookie("session");

@@ -1,4 +1,5 @@
 <script>
+	import { goto } from '$app/navigation';
 	import argon2_script from "$lib/argon2.js?raw";
 
 	import {
@@ -18,9 +19,10 @@
 		ShortDecrypt,
 		Encryptor
 	} from "$lib";
+    import { onMount } from "svelte";
 
 	let key = CryptoJS.enc.Latin1.parse("12345678901234567890123456789012")
-	function window_load()
+	function window_load2()
 	{
 		console.log(CryptoJS.lib.WordArray.random(32).toString());
 		console.log(CryptoJS.lib.WordArray.random(32).toString());
@@ -52,7 +54,7 @@
 		//eval(argon2_script); // Ideally I should be loading this script through a script tag in <svelte:head>, but the load event for that doesnt work properly so im stuck with this		
 		//GenerateBaseKey("buh123", Argon2GenCallback);
 	}
-	
+	onMount(window_load2);
 	function ReadFileArrayBuffer(file, callback)
 	{
 		let reader = new FileReader();
@@ -145,7 +147,7 @@
 	}
 </script>
 
-<svelte:window on:load={window_load}/>
+<!--<svelte:window on:load={window_load}/>-->
 <input type="file" on:change={file_load}>
 <input type="file" on:change={file_load_decrypt}>
 <input type="file" on:change={file_testing}>

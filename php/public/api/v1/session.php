@@ -1,6 +1,6 @@
 <?php
-	require_once($_SERVER["DOCUMENT_ROOT"] . "/lib/session.php");
-	require_once($_SERVER["DOCUMENT_ROOT"] . "/lib/utility.php");
+	require_once($_SERVER["DOCUMENT_ROOT"] . "/../lib/session.php");
+	require_once($_SERVER["DOCUMENT_ROOT"] . "/../lib/utility.php");
 
 	RouteSetup();
 	
@@ -21,20 +21,21 @@
 					ResponseType::SessionExpired
 				);
 			
-			$session_decoded = base64_decode($_COOKIE["session"]);
+			$session_decoded = base64_decode($_COOKIE["session"], true);
 			if($session_decoded === false || ByteStringLength($session_decoded) !== Session::GetTokenLength())
 			{
 				RemoveCookie("session");
 
 				ExitResponse(
 					ResponseType::SessionExpired // to be safe, we shouldn't give the client too much information about the state of the server
+					, "buh"
 				);
 			}
 
 			$session = Session::FromToken($session_decoded);
 			if($session !== false)
 			{
-				ExitResponse(ResponseType::Success, pack("Qa32", $session->expire_date, $session->DeriveEncryptionKey()));
+				ExitResponse(ResponseType::Success, $session->DeriveEncryptionKey());
 			}
 			else
 			{
@@ -63,7 +64,7 @@
 					"account_id not provided"
 				);
 
-			$account_id_decoded = base64_decode($request_data["account_id"]);
+			$account_id_decoded = base64_decode($request_data["account_id"], true);
 			if($account_id_decoded === false)
 				ExitResponse(
 					ResponseType::BadArgument,
@@ -84,7 +85,8 @@
 				"secure" => true,
 				"httponly" => true
 			]);
-			ExitResponse(ResponseType::Success, pack("Qa*", $new_session->expire_date, $new_session->DeriveEncryptionKey()));
+
+			ExitResponse(ResponseType::Success, pack("Qa32", $new_session->expire_date, $new_session->DeriveEncryptionKey()));
 
 		default:
 			ExitResponse(ResponseType::BadRequestMethod);

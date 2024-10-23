@@ -1,12 +1,12 @@
 <?php
-	require_once($_SERVER["DOCUMENT_ROOT"] . "/lib/database_interface.php");
+	require_once($_SERVER["DOCUMENT_ROOT"] . "/../lib/database.php");
 
 	// return account data here
 	if($_REQUEST["REQUEST_METHOD"] === "GET")
 	{
 		$session = HandleSession();
 
-		$db = new FileDatabse(); // GetSubscriptionTypeDataByName
+		$db = new Database(); // GetSubscriptionTypeDataByName
 		$account_data = $db->FetchAccountData($session->account_id);
 		if($account_data !== null) // expire_date storage_left storage_max
 			ExitResponse(
@@ -17,7 +17,7 @@
 					$account_data["storage_max"]
 				)
 			);
-		else
+		else // if the account for the given account hash has not been created yet
 		{
 			$sub_type_data = $db->GetSubscriptionTypeDataByName("free");
 			ExitResponse(

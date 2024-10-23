@@ -1,13 +1,31 @@
 <script>
+
+	import { onMount } from "svelte";
+	import { goto } from '$app/navigation';
+	import StatusBox from "../StatusBox.svelte";
+
 	import {
 		CryptoJS,
+		Uint8ArrayToWordArray,
 		GenerateBaseKey,
 		GenerateAccountID,
 		GenerateMasterKey,
-	} from "$lib"
+		ShortEncrypt,
+		CombineCipherIV
+	} from "$lib";
 
-	import StatusBox from "../StatusBox.svelte";
+	import {
+		CreateSession,
+		CheckSession,
+		FetchEncryptionKey,
+		ClearSession
+	} from "$lib/session";
 
+	onMount(function(){
+		if(CheckSession())
+			goto("/files", {replaceState: true});
+	});
+	
 	let passcode_input;
 	
 	let status_box_data = {
@@ -25,15 +43,33 @@
 		generating_base_key = true;
 
 		status_box_data.open = true;
-		GenerateBaseKey(passcode_input.value, function(key){
-			console.log(key.hashHex);			
+		GenerateBaseKey(passcode_input.value).then(function(key){	
+			key = Uint8ArrayToWordArray(key.hash);
+
 			status_box_data.state = "finished";
 			status_box_data.text = "Key Successfully Generated!"
+
 			setTimeout(function(){
 				status_box_data.open = false;
+
 				setTimeout(function(){
 					status_box_data.state = "loading";
-					//generating_base_key = false;
+
+					CreateSession(
+						GenerateAccountID(key)
+					).then(function(session_key){
+						sessionStorage.setItem("session-key", session_key.toString(CryptoJS.enc.Base64));						
+						localStorage.setItem(
+							"master-key",
+							CombineCipherIV(ShortEncrypt(
+								GenerateMasterKey(key),
+								session_key,
+								CryptoJS.pad.NoPadding
+							)).toString(CryptoJS.enc.Base64)
+						);
+						
+						goto("/files", { replaceState: true });
+					});
 				}, 500);
 			}, 1000)
 		});
@@ -95,6 +131,8 @@
 		font-family: Montserrat;
 		font-size: 14px;
 
+		background-color: rgb(255, 255, 255);
+
 		border: none;
 		border-radius: 5px;
 
@@ -144,6 +182,7 @@
 </style>
 
 <StatusBox {...status_box_data}/>
+
 <div id="login-window">
 	<p>storage.black</p>
 	<input type="password" placeholder="Passcode" bind:this={passcode_input}>

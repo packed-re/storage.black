@@ -133,7 +133,7 @@
 
 					ExitResponse(ResponseType::Success);
 				case 2: // delete
-					if($file_exists && unlink($file_name) === false) // maybe the file doesnt exist, while for whatever reason the listing in the db does
+					if($file_exists && unlink($file_name) === false) // maybe the file doesnt exist, while for whatever reason the listing in the db might
 						ExitResponse(ResponseType::ServerError, "failed to delete file", true);
 					
 					$db = new FileDatabase();

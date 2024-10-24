@@ -1,6 +1,9 @@
 import {
 	CryptoJS,
 	Uint8ArrayToWordArray,
+	GenerateAccountID,
+	GenerateMasterKey,
+	GenerateBaseDataID,
 	ShortEncrypt,
 	ShortDecrypt,
 	CombineCipherIV,
@@ -10,8 +13,12 @@ import {
 import { api_base } from "$lib/networking";
 
 // account hash expected to be WordArray
-function CreateSession(account_hash, master_key, age = 60 * 60)
+function CreateSession(base_key, age = 60 * 60)
 {
+	let account_hash = GenerateAccountID(base_key);
+	let master_key = GenerateMasterKey(base_key);
+	let base_data_id = GenerateBaseDataID(base_key);
+
 	return new Promise(function(resolver){
 		fetch(api_base + "session", {
 			method: "POST",
@@ -32,6 +39,10 @@ function CreateSession(account_hash, master_key, age = 60 * 60)
 				sessionStorage.setItem("session-key", session_encryption_key.toString(CryptoJS.enc.Base64));
 				localStorage.setItem("session-expire-date", expire_date.toString()); // makes so much sense how the language of the web doesnt have a direct, built-in method of converting its designated structure for handling binary data to base64
 				
+				base_data_id = base_data_id.toString(CryptoJS.enc.Base64);
+				sessionStorage.setItem("data-id", base_data_id);
+				localStorage.setItem("base-data-id", base_data_id);
+
 				StoreMasterKey(master_key);
 
 				return resolver(session_encryption_key);
@@ -42,6 +53,9 @@ function CreateSession(account_hash, master_key, age = 60 * 60)
 
 function CheckSession()
 {
+	if(GetCurrentDataID() === null)
+		return false;
+
 	let expire_date = localStorage.getItem("session-expire-date");
 
 	if(expire_date === null)
@@ -87,8 +101,10 @@ function ClearSession()
 {
 	return new Promise(function(resolver){
 		sessionStorage.removeItem("session-key");
+		sessionStorage.removeItem("data-id");
 		localStorage.removeItem("session-expire-date");
 		localStorage.removeItem("master-key");
+		localStorage.removeItem("base-data-id");
 
 		fetch(api_base + "session", {
 			method: "DELETE",
@@ -142,11 +158,29 @@ function GetMasterKey()
 	});
 }
 
+function UpdateDataID(data_id)
+{	
+	sessionStorage.setItem("data-id", data_id.toString(CryptoJS.enc.Base64));
+}
+
+function GetCurrentDataID()
+{
+	let data_id = sessionStorage.getItem("data-id");
+	data_id = data_id !== null ? data_id : localStorage.getItem("base-data-id");
+
+	if(data_id !== null)
+		return CryptoJS.enc.Base64.parse(data_id);
+	else
+		return null;
+}
+
 export {
 	CreateSession,
 	CheckSession,
 	FetchSessionEncryptionKey,
 	ClearSession,
 	StoreMasterKey,
-	GetMasterKey
+	GetMasterKey,
+	UpdateDataID,
+	GetCurrentDataID
 };

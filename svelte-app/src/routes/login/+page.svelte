@@ -9,6 +9,7 @@
 		GenerateBaseKey,
 		GenerateAccountID,
 		GenerateMasterKey,
+		GenerateBaseDataID,
 		ShortEncrypt,
 		CombineCipherIV
 	} from "$lib";
@@ -43,8 +44,8 @@
 		generating_base_key = true;
 
 		status_box_data.open = true;
-		GenerateBaseKey(passcode_input.value).then(function(key){	
-			key = Uint8ArrayToWordArray(key.hash);
+		GenerateBaseKey(passcode_input.value).then(function(account_base_key){	
+			account_base_key = Uint8ArrayToWordArray(account_base_key.hash);
 
 			status_box_data.state = "finished";
 			status_box_data.text = "Key Successfully Generated!"
@@ -56,8 +57,7 @@
 					status_box_data.state = "loading";
 
 					CreateSession(
-						GenerateAccountID(key),
-						GenerateMasterKey(key)
+						account_base_key					
 					).then(function(session_key){
 						if(session_key)
 							window.location.replace("/files");

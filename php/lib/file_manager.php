@@ -59,16 +59,17 @@
 
 			$rows = $this->DB->query("
 				SELECT 
-				SHA2(
-					files.id
-					CONCAT(
-						accounts.account_hash,
-						files.data_id,
-						files.file_data,
-						files.encryption_data,
-						files.file_size,
-						" . MYSQLMakeString($this->DB, $___name_hash_salt) . "
-					), 256) as full_hash,
+					files.id,
+					SHA2(
+						CONCAT(
+							accounts.account_hash,
+							files.data_id,
+							files.file_data,
+							files.encryption_data,
+							files.file_size,
+							" . MYSQLMakeString($this->DB, $___name_hash_salt) . "
+						)
+					, 256) as full_hash,
 					files.file_size
 				FROM accounts
 				INNER JOIN files ON files.account_id = accounts.id

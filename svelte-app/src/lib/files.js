@@ -1,5 +1,10 @@
 import {
-	GetMasterKey
+	CryptoJS
+} from "$lib";
+
+import {
+	GetMasterKey,
+	GetCurrentDataID
 } from "$lib/session";
 
 import { api_base } from "$lib/networking";
@@ -10,7 +15,7 @@ function FetchFileList()
 {
 	return new Promise(function(resolver){
 		GetMasterKey().then(function(){
-			fetch(api_base + "file", {
+			fetch(api_base + "file?data-id=" + GetCurrentDataID().toString(CryptoJS.enc.Base64), {
 				method: "GET",
 				credentials: "include"
 			}).then(async function(response){

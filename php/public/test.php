@@ -5,7 +5,7 @@
 	require_once("../lib/database.php");
 
 	RouteSetup();
-	exit();
+	exit(bin2hex(random_bytes(32)));
 	$db = new FileDatabse();
 
 	var_dump($db->AccountExists("12345678901234567890123456789011"));

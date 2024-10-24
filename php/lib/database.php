@@ -375,7 +375,7 @@
 			$stmt = $this->DB->prepare("
 				SELECT files.data_id, files.file_data, files.encryption_data, files.file_size FROM files
 				INNER JOIN accounts ON accounts.account_hash = ?
-				WHERE accounts.id = files.account_id AND files.data.id = ? AND files.finished_writing = 1
+				WHERE accounts.id = files.account_id AND files.data_id = ? AND files.finished_writing = 1
 			");
 
 			$stmt->bind_param("ss", $account_hash, $data_id);

@@ -12,14 +12,30 @@
 </script>
 <style>
 	#file-browser{
-		height: 1px; /* why? */
 		width: 100%;
 		color: white;
 	}
 
-	#file-browser > thead > tr > th{
-		height: 50px;
-		border-bottom: 1px solid white;
+	:global(#file-browser th){
+		font-weight: 300;
+		font-size: 16px;
+		
+		height: 35px;
+
+		user-select: none;		
+		border-bottom: 1px solid rgb(210, 210, 210);
+	}
+
+	:global(#file-browser tbody > tr:nth-child(1) > td){
+		padding: 10px 0 5px 0;
+	}
+
+	:global(#file-browser td){
+		font-weight: 300;
+		font-size: 15px;
+		
+		height: 35px;
+		padding: 5px 0;
 	}
 
 	:global(#file-browser th > div), :global(#file-browser td > div){
@@ -43,6 +59,11 @@
 
 		box-sizing: border-box;
 		padding-left: 20px;
+	}
+
+	:global(#file-browser td:last-child > div){
+		box-sizing: border-box;
+		padding-right: 10px;
 	}
 </style>
 

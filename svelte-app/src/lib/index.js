@@ -3,18 +3,36 @@ import CryptoJS from "crypto-js";
 // returns true if equal
 function CompareWordArrays(wa1, wa2)
 {
+	if(wa1.sigBytes !== wa2.sigBytes)
+		return false;
+	
 	wa1 = wa1.words;
 	wa2 = wa2.words;
 
 	let wordCount = wa1.length;
-	if(wordCount !== wa2.length)
-		return false;
-
 	for(let i = 0; i < wordCount; ++i)
 		if(wa1[i] !== wa2[i])
 			return false;
 
 	return true;
+}
+
+function XORWordArrays(wa1, wa2)
+{
+	let byteCount = wa1.sigBytes;
+	if(byteCount !== wa2.sigBytes)
+		return null;
+	
+	wa1 = wa1.words;
+	wa2 = wa2.words;
+
+	let out_words = [];
+
+	let wordCount = wa1.length;
+	for(let i = 0; i < wordCount; ++i)
+		out_words[i] = wa1[i] ^ wa2[i];
+
+	return new CryptoJS.lib.WordArray.init(out_words, byteCount)
 }
 
 // for cryptojs's "words"
@@ -260,6 +278,7 @@ function WordArrayToUint8Array(word_array)
 let _ArgonBaseKeySalt = WordArrayToUint8Array(CryptoJS.enc.Hex.parse("57d7f4ba75600c6992d9e0eb2e2f6b0e5b750276675cef0c9b112c54a2f1dd82"));
 let _AccountIDSalt = CryptoJS.enc.Hex.parse("5d54dfe28d8adb0a63fff0e518db2bed2eaedef5fd34084bc14f328f21832ba0");
 let _MasterKeySalt = CryptoJS.enc.Hex.parse("170a3530f5d5bde9156e86a539b1b7500b40b6a7caa163e0f819f2ce9745adb8");
+let _BaseDataIDSalt = CryptoJS.enc.Hex.parse("a03a0527ac9c906ad6dde127c16413a003d5fbc299eeb1562133cb8f997d2bec");
 
 // Use this only when the page has loaded
 function GenerateBaseKey(pass)
@@ -290,6 +309,20 @@ function GenerateAccountID(base_key)
 function GenerateMasterKey(base_key)
 {
 	return CryptoJS.HmacSHA256(base_key, _MasterKeySalt);
+}
+
+function GenerateBaseDataID(base_key)
+{
+	let hash = CryptoJS.HmacSHA256(base_key, _BaseDataIDSalt);
+	let firstHalf = SliceWordArray(hash, 0, 16); // i should make a function that skips the slicing part and directly xors halves, but im out of time so
+	let secondHalf = SliceWordArray(hash, 16);
+	
+	return XORWordArrays(firstHalf, secondHalf);
+}
+
+function GenerateUniqueDataID()
+{
+	return CryptoJS.lib.WordArray.random(16);
 }
 
 function GenerateIV()
@@ -492,6 +525,7 @@ class Decryptor
 export {
 	CryptoJS,
 	CompareWordArrays,
+	XORWordArrays,
 	SliceWordArray,
 	ChopWordArray,
 	ArrayBufferToWordArray,
@@ -502,6 +536,7 @@ export {
 	GenerateBaseKey,
 	GenerateAccountID,
 	GenerateMasterKey,
+	GenerateBaseDataID,
 	GenerateIV,
 	ShortEncrypt,
 	ShortDecrypt,

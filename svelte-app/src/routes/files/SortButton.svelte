@@ -17,8 +17,6 @@
 	p{
 		margin: 0;
 		padding: 0;
-
-		font-weight: 400;
 	}
 </style>
 <!--<button on:click={set_state}>t1</button>-->

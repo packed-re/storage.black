@@ -15,18 +15,18 @@
 		case "GET":
 			$session = HandleSession();
 
-			$data_id = GetHeader("sb-data-id");
+			$data_id = GetAllRequestData()["data-id"] ?? null;
 			if($data_id === null)
 				ExitResponse(
 					ResponseType::MissingArgument,
-					"sb-data-id not provided"
+					"data-id not provided"
 				);
 
 			$data_id = base64_decode($data_id, true);
 			if($data_id === false)
 				ExitResponse(
 					ResponseType::BadArgument,
-					"sb-data-id is invalid"
+					"data-id is invalid"
 				);
 
 

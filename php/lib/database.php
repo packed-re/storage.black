@@ -373,7 +373,7 @@
 		public function ListFiles($account_hash, $data_id) // remake this to also delete old unfinished files
 		{
 			$stmt = $this->DB->prepare("
-				SELECT files.data_id, files.file_data, files.encryption_data, files.file_size, files.finished_writing FROM files
+				SELECT files.data_id, files.file_data, files.encryption_data, files.file_size FROM files
 				INNER JOIN accounts ON accounts.account_hash = ?
 				WHERE accounts.id = files.account_id AND files.data.id = ? AND files.finished_writing = 1
 			");

@@ -31,8 +31,7 @@
 
 
 			$db = new FileDatabase();
-
-			exit(pack("Qa*", $read_chunk_size, json_encode($db->ListFiles($session->account_id, $data_id)))); // chunk size + list
+			ExitResponse(ResponseType::Success, pack("Qa*", $read_chunk_size, json_encode($db->ListFiles($session->account_id, $data_id)))); // chunk size + list
 
 		case "POST":
 			$session = HandleSession();

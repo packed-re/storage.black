@@ -12,6 +12,7 @@
 		global $_valid_origins;
 
 		$origin = $_SERVER["HTTP_ORIGIN"];		
+		file_put_contents("buhbuhbuh.txt", $origin);
 		if(isset($_valid_origins[$origin]))
 			return $origin;
 		

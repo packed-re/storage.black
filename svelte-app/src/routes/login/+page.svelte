@@ -1,7 +1,6 @@
 <script>
 
 	import { onMount } from "svelte";
-	import { goto } from '$app/navigation';
 	import StatusBox from "../StatusBox.svelte";
 
 	import {
@@ -17,13 +16,14 @@
 	import {
 		CreateSession,
 		CheckSession,
-		FetchEncryptionKey,
-		ClearSession
+		FetchSessionEncryptionKey,
+		ClearSession,
+		StoreMasterKey
 	} from "$lib/session";
 
 	onMount(function(){
-		if(CheckSession())
-			goto("/files", {replaceState: true});
+		if(CheckSession())			
+			window.location.replace("/files");
 	});
 	
 	let passcode_input;
@@ -56,19 +56,11 @@
 					status_box_data.state = "loading";
 
 					CreateSession(
-						GenerateAccountID(key)
+						GenerateAccountID(key),
+						GenerateMasterKey(key)
 					).then(function(session_key){
-						sessionStorage.setItem("session-key", session_key.toString(CryptoJS.enc.Base64));						
-						localStorage.setItem(
-							"master-key",
-							CombineCipherIV(ShortEncrypt(
-								GenerateMasterKey(key),
-								session_key,
-								CryptoJS.pad.NoPadding
-							)).toString(CryptoJS.enc.Base64)
-						);
-						
-						goto("/files", { replaceState: true });
+						if(session_key)
+							window.location.replace("/files");
 					});
 				}, 500);
 			}, 1000)

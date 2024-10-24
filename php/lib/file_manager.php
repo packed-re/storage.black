@@ -11,6 +11,7 @@
 		public $finished; // bool
 		public $offset; // int
 		public $file_size; // int
+		//public $upload_date; // int
 		public $encryption_data; // string
 		public $data_id; // string
 		public $file_data; // string
@@ -24,6 +25,7 @@
 			$this->offset = $file_header_unpacked["offset"];
 			$this->file_size = $file_header_unpacked["file_size"];
 
+			//$this->upload_date = $file_header_unpacked["upload_date"];
 			$this->encryption_data = $file_header_unpacked["encryption_data"];
 			$this->data_id = $file_header_unpacked["data_id"];
 			$this->file_data = $file_header_unpacked["file_data"];
@@ -39,7 +41,7 @@
 	{
 		public static function GetManagedFileNameFromHash($hash) // we use this in DeleteUnfinishedFiles
 		{
-			return $_SERVER["DOCUMENT_ROOT"] . "/files/" . bin2hex(ByteSubString($hash, 0, 16) ^ ByteSubString($hash, 16));
+			return $_SERVER["DOCUMENT_ROOT"] . "/../files/" . bin2hex(ByteSubString($hash, 0, 16) ^ ByteSubString($hash, 16));
 		}
 
 		public static function GetManagedFileName($account_hash, $data_id, $file_data, $encryption_data, $file_size)
@@ -106,6 +108,23 @@
 		public function ListFiles($account_hash, $data_id)
 		{
 			$out = Database::ListFiles($account_hash, $data_id);
+			foreach ($out as $key => &$value)
+			{
+				$rowCount = count($out[$key]);
+				for($i = 0; $i < $rowCount; ++$i)
+				{
+					$time = filemtime(FileDatabase::GetManagedFileName(
+						$account_hash,
+						$out[$key][$i]["data_id"],
+						$out[$key][$i]["file_data"],
+						$out[$key][$i]["encryption_data"],
+						$out[$key][$i]["file_size"]
+					));
+
+					if($time !== false)
+						$out[$key][$i]["date"] = $time;
+				}
+			}
 			$this->DeleteUnfinishedFiles($account_hash);
 			return $out;
 		}

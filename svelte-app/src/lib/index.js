@@ -330,6 +330,11 @@ function GenerateIV()
 	return CryptoJS.lib.WordArray.random(16);
 }
 
+function GenerateEncryptionKey()
+{
+	return CryptoJS.lib.WordArray.random(32);
+}
+
 // key needs to be of proper length otherwise SerializableCipher will break!!!! 
 function ShortEncrypt(data, key, padding = CryptoJS.pad.Pkcs7) // key is a WordArrays. data should be able to be both a WordArray and a string
 {
@@ -401,6 +406,21 @@ function ChopCipherIV(cipher)
 	let iv = SliceWordArray(cipher, cipher.sigBytes-16);
 	ChopWordArray(cipher, 0, cipher.sigBytes-16);
 	return iv;
+}
+
+function CompleteShortEncrypt(data, key, iv, padding = CryptoJS.pad.Pkcs7)
+{
+	return CombineCipherIV(ShortEncrypt(
+		data, key, iv, padding
+	));
+}
+
+function CompleteShortDecrypt(data, key, padding = CryptoJS.pad.Pkcs7)
+{
+	let iv = ChopCipherIV(data);
+	return ShortDecrypt(
+		data, key, iv, padding
+	);
 }
 
 class Encryptor
@@ -537,11 +557,15 @@ export {
 	GenerateAccountID,
 	GenerateMasterKey,
 	GenerateBaseDataID,
+	GenerateUniqueDataID,
 	GenerateIV,
+	GenerateEncryptionKey,
 	ShortEncrypt,
 	ShortDecrypt,
 	CombineCipherIV,
 	ChopCipherIV,
+	CompleteShortEncrypt,
+	CompleteShortDecrypt,
 	Encryptor,
 	Decryptor
 };

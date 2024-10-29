@@ -6,11 +6,23 @@ import {
 	GenerateBaseDataID,
 	ShortEncrypt,
 	ShortDecrypt,
+	CompleteShortEncrypt,
+	CompleteShortDecrypt,
 	CombineCipherIV,
 	ChopCipherIV
 } from "$lib";
 
 import { api_base } from "$lib/networking";
+
+let session = { // not using sessionStorage because that writes to disk which could potentially be unsafe
+	session_key: null,
+	master_key: null,
+
+	folder: {
+		data_id: null,
+		encryption_key: null
+	}
+};
 
 // account hash expected to be WordArray
 function CreateSession(base_key, age = 60 * 60)
@@ -34,28 +46,33 @@ function CreateSession(base_key, age = 60 * 60)
 			if(status === 0) // success
 			{
 				let expire_date = new BigUint64Array(buffer.slice(1, 9))[0];
-				let session_encryption_key = Uint8ArrayToWordArray(new Uint8Array(buffer, 1 + 8));
-	
-				sessionStorage.setItem("session-key", session_encryption_key.toString(CryptoJS.enc.Base64));
-				localStorage.setItem("session-expire-date", expire_date.toString()); // makes so much sense how the language of the web doesnt have a direct, built-in method of converting its designated structure for handling binary data to base64
+				session.session_key = Uint8ArrayToWordArray(new Uint8Array(buffer, 1 + 8)); 																											// makes so much sense how the language of the web doesnt have a direct, built-in method of converting its designated structure for handling binary data to base64
 				
-				base_data_id = base_data_id.toString(CryptoJS.enc.Base64);
-				sessionStorage.setItem("data-id", base_data_id);
+				session.folder.data_id = base_data_id;
+				session.folder.encryption_key = master_key;
+	
+				localStorage.setItem("session-expire-date", expire_date.toString());
+
+				base_data_id = CompleteShortEncrypt(
+					base_data_id,
+					session.session_key,
+					CryptoJS.pad.NoPadding
+				).toString(CryptoJS.enc.Base64);
+
+				sessionStorage.setItem("data-id", base_data_id)
 				localStorage.setItem("base-data-id", base_data_id);
 
 				StoreMasterKey(master_key);
 
-				return resolver(session_encryption_key);
+				return resolver(true);
 			}
+			else return resolver(false);
 		});
 	});
 }
 
 function CheckSession()
 {
-	if(GetCurrentDataID() === null)
-		return false;
-
 	let expire_date = localStorage.getItem("session-expire-date");
 
 	if(expire_date === null)
@@ -67,15 +84,19 @@ function CheckSession()
 	return true;
 }
 
+function LogOut()
+{
+	ClearSession().then(()=>window.location.replace("/login"));
+}
+
 function FetchSessionEncryptionKey() // returns false if session isnt valid, wordarray if it is
 {
 	return new Promise(function(resolver){
 		if(!CheckSession())
 			return resolver(false);
 		
-		let encryption_key = sessionStorage.getItem("session-key");
-		if(encryption_key !== null)
-			return resolver(CryptoJS.enc.Base64.parse(encryption_key));
+		if(session.session_key)
+			return resolver(CryptoJS.enc.Base64.parse(session.session_key));
 
 		fetch(api_base + "session", {
 			method: "GET",
@@ -86,13 +107,11 @@ function FetchSessionEncryptionKey() // returns false if session isnt valid, wor
 					
 			if(status === 0) // success
 			{
-				encryption_key = Uint8ArrayToWordArray(new Uint8Array(buffer, 1));
-				sessionStorage.setItem("session-key", encryption_key.toString(CryptoJS.enc.Base64));
-	
-				resolver(encryption_key);
+				session.session_key = Uint8ArrayToWordArray(new Uint8Array(buffer, 1));	
+				resolver(session.session_key);
 			}
 			else
-				resolver(false);
+				resolver(null);
 		});
 	});
 }
@@ -100,7 +119,8 @@ function FetchSessionEncryptionKey() // returns false if session isnt valid, wor
 function ClearSession()
 {
 	return new Promise(function(resolver){
-		sessionStorage.removeItem("session-key");
+		session = {};
+
 		sessionStorage.removeItem("data-id");
 		localStorage.removeItem("session-expire-date");
 		localStorage.removeItem("master-key");
@@ -121,11 +141,13 @@ function StoreMasterKey(master_key)
 	FetchSessionEncryptionKey().then(function(session_key){
 		if(session_key)
 		{
-			localStorage.setItem("master-key", CombineCipherIV(ShortEncrypt(
+			session.master_key = master_key;
+
+			localStorage.setItem("master-key", CompleteShortEncrypt(
 				master_key,
 				session_key,
 				CryptoJS.pad.NoPadding
-			)).toString(CryptoJS.enc.Base64))
+			).toString(CryptoJS.enc.Base64));
 		}
 	});
 }
@@ -133,54 +155,171 @@ function StoreMasterKey(master_key)
 function GetMasterKey()
 {
 	return new Promise(function(resolver){
-		let key = localStorage.getItem("master-key");
-		if(key === null)
-			return resolver(key);
+		if(!session.master_key)
+			return resolver(session.master_key);
+
+		let stored_master_key = localStorage.getItem("master-key");
+		if(stored_master_key === null)
+			return resolver(null);
 
 		FetchSessionEncryptionKey().then(function(session_key){
-			if(session_key)
-			{
-				let cipher = CryptoJS.enc.Base64.parse(key);
-				let iv = ChopCipherIV(cipher);
-
-				resolver(
-					ShortDecrypt(
-						cipher,
-						session_key,
-						iv,
-						CryptoJS.pad.NoPadding
-					)
-				);
-			}
-			else
+			if(session_key === null)			
 				return resolver(null);
+			
+			session.master_key = CompleteShortDecrypt(
+				CryptoJS.enc.Base64.parse(stored_master_key),
+				session_key,
+				CryptoJS.pad.NoPadding
+			);
+
+			return resolver(session.master_key);
 		});
 	});
 }
 
 function UpdateDataID(data_id)
 {	
-	sessionStorage.setItem("data-id", data_id.toString(CryptoJS.enc.Base64));
+	session.data_id = data_id;
+
+	FetchSessionEncryptionKey().then(function(session_key){
+		if(session_key === null)
+			return;
+		
+		sessionStorage.setItem(
+			CompleteShortEncrypt(
+				data_id,
+				session_key,
+				CryptoJS.pad.NoPadding
+			).toString(CryptoJS.enc.Base64)
+		);
+	});
+}
+
+function ResetDataID()
+{
+	FetchSessionEncryptionKey().then(function(session_key){
+		if(session_key === null)
+			return;
+	
+		let base_data_id = localStorage.getItem("base-data-id");
+		if(base_data_id === null)
+			return;
+
+		sessionStorage.setItem("data-id", base_data_id);
+
+		session.data_id = CompleteShortDecrypt(
+			CryptoJS.enc.Base64.parse(base_data_id),
+			session_key,
+			CryptoJS.pad.NoPadding
+		);
+	});
 }
 
 function GetCurrentDataID()
 {
-	let data_id = sessionStorage.getItem("data-id");
-	data_id = data_id !== null ? data_id : localStorage.getItem("base-data-id");
+	return new Promise(function(resolver){		
+		if(session.data_id)
+			return resolver(session.data_id);
 
-	if(data_id !== null)
-		return CryptoJS.enc.Base64.parse(data_id);
-	else
-		return null;
+		let encrypted_data_id = sessionStorage.getItem("data-id");
+		
+		if(encrypted_data_id === null)
+			encrypted_data_id = localStorage.getItem("base-data-id");
+
+		if(encrypted_data_id === null)
+			return resolver(null);
+
+		FetchSessionEncryptionKey().then(function(session_key){
+			if(session_key === null)
+				return resolver(null);
+
+			return resolver(CompleteShortDecrypt(
+				encrypted_data_id,
+				session_key,
+				CryptoJS.pad.NoPadding
+			));
+		});
+	});
+}
+
+function SetFolderData(data_id, encryption_key)
+{
+	return new Promise(function(resolver){
+		FetchSessionEncryptionKey().then(function(session_key){
+			if(session_key === null)
+				return resolver(false);
+
+			sessionStorage.setItem("data-id", CompleteShortEncrypt(
+				data_id,
+				session_key,
+				CryptoJS.pad.NoPadding
+			).toString(CryptoJS.enc.Base64));
+
+			sessionStorage.setItem("encryption-key", CompleteShortEncrypt(
+				encryption_key,
+				session_key,
+				CryptoJS.pad.NoPadding
+			).toString(CryptoJS.enc.Base64));
+
+			return resolver(true);
+		});
+	});
+}
+
+function ResetFolderData()
+{
+	return new Promise(function(resolver){
+		FetchSessionEncryptionKey().then(function(session_key){
+			if(session_key === null)
+				return resolver(false);
+
+			let master_key = localStorage.getItem("master-key");
+			if(master_key === null)
+				return resolver(false);
+
+			let base_data_id = localStorage.getItem("base-data-id");
+			if(base_data_id === null)
+				return resolver(false);
+
+			sessionStorage.setItem("encryption-key", master_key);
+			sessionStorage.setItem("data-id", base_data_id);
+
+			session.folder.encryption_key = CompleteShortDecrypt(
+				CryptoJS.enc.Base64.parse(master_key),
+				session_key,
+				CryptoJS.pad.NoPadding
+			);
+
+			session.folder.data_id = CompleteShortDecrypt(
+				CryptoJS.enc.Base64.parse(base_data_id),
+				session_key,
+				CryptoJS.pad.NoPadding
+			);
+
+			return resolver(true);
+		});
+	});
+}
+
+function GetCurrentFolderData()
+{
+	return session.folder;
+}
+
+function RebuildSession()
+{
+
 }
 
 export {
 	CreateSession,
 	CheckSession,
+	LogOut,
 	FetchSessionEncryptionKey,
 	ClearSession,
 	StoreMasterKey,
 	GetMasterKey,
 	UpdateDataID,
+	ResetDataID,
 	GetCurrentDataID
 };

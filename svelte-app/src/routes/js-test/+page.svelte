@@ -1,9 +1,24 @@
 <script>
 	import { CryptoJS, Uint8ArrayToWordArray } from "$lib";
 	import { onMount } from "svelte";
-	import { CheckSession, CreateSession, FetchEncryptionKey, ClearSession } from "$lib/session"
+	import { CheckSession, CreateSession, ClearSession } from "$lib/session"
 
-	onMount(function(){
+	import {
+		setThing,
+		getThing
+	} from "./test.js";
+
+	import {
+		doTest
+	} from "./test2.js";
+
+	onMount(()=>{
+	console.log(getThing())
+	setThing(123);
+	doTest();
+	doTest();});
+
+	/*onMount(function(){
 		console.log(CheckSession());
 		CreateSession(CryptoJS.lib.WordArray.random(32).toString(CryptoJS.enc.Base64)).then(function(v){
 			console.log("c1", v.toString(CryptoJS.enc.Hex));			
@@ -25,7 +40,7 @@
 		}).then(function(response){
 			response.text().then(s=>console.log(s));
 		})
-	})	
+	})	*/
 </script>
 <form action="http://127.0.0.1:80" method="POST" enctype="multipart/form-data">
 	<label for="file">File</label>	

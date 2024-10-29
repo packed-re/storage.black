@@ -4,6 +4,7 @@
 
 	import {
 		CheckSession,
+		LogOut,
 		ClearSession
 	} from "$lib/session";
 
@@ -13,17 +14,12 @@
 
 	onMount(function(){
 		if(!CheckSession())
-			window.location.replace("/login");
+			LogOut();
 		else
-			FetchFileList().then(function(v1, v2){
+			FetchFileList().then(function(_, v1, v2){
 				console.log(v1, v2);
 			})
 	})
-
-	function LogOut()
-	{
-		ClearSession().then(()=>window.location.replace("/login"));
-	}
 </script>
 <style>
 	@font-face{

@@ -18,7 +18,7 @@
 
 		public function __construct($file_header)
 		{
-			$file_header_unpacked = unpack("Caction/Cfinished/x6/Qoffset/Qfile_size/a104encryption_data/a16data_id/a*file_data", $file_header);
+			$file_header_unpacked = unpack("Caction/Cfinished/x6/Poffset/Pfile_size/a104encryption_data/a16data_id/a*file_data", $file_header);
 			
 			$this->action = $file_header_unpacked["action"];
 			$this->finished = $file_header_unpacked["finished"] === 1;
@@ -33,7 +33,7 @@
 
 		public function DeriveFileName($account_hash)
 		{
-			return GetManagedFileName($account_hash, $this->data_id, $this->file_data, $this->encryption_data, $this->file_size);
+			return FileDatabase::GetManagedFileName($account_hash, $this->data_id, $this->file_data, $this->encryption_data, $this->file_size);
 		}
 	}
 

@@ -1,14 +1,30 @@
 <script>
+    import { onMount } from "svelte";
+    import { writable } from "svelte/store";
+
 	import SortButton from "./SortButton.svelte";
 	import FileListing from "./FileListing.svelte";
-    import { writable } from "svelte/store";
-	
-	export let files;
+
+	import {
+		CheckSession,
+		LogOut,
+		ClearSession
+	} from "$lib/session";
+
+	import {
+		FetchFileList
+	} from "$lib/files";
 
 	let sort_state = writable({
 		name: "Upload Date",
 		state: null//"DESC"
 	});
+
+	onMount(function(){
+		FetchFileList().then(function(success, v1, v2){
+			console.log(v1, v2);
+		});
+	})
 </script>
 <style>
 	#file-browser{
@@ -93,14 +109,14 @@
 				<FileListing
 					name="Test File Name"
 					timestamp={Math.floor(Date.now()/1000)}
-					file_size=1234
+					file_size=123456
 				/>				
 			</tr>
 			<tr>
 				<FileListing
 					name="Test File Name"
 					timestamp={Math.floor(Date.now()/1000)}
-					file_size=1234
+					file_size=12345678
 				/>
 			</tr>
 		</tbody>

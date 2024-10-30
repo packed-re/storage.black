@@ -11,7 +11,7 @@
 		if($account_data !== null) // expire_date storage_left storage_max
 			ExitResponse(
 				ResponseType::Success,
-				pack("QQQ",
+				pack("PPP",
 					$account_data["expire_date"],
 					$account_data["storage_left"],
 					$account_data["storage_max"]
@@ -22,7 +22,7 @@
 			$sub_type_data = $db->GetSubscriptionTypeDataByName("free");
 			ExitResponse(
 				ResponseType::Success,
-				pack("QQQ",
+				pack("PPP",
 					time() + $sub_type_data["duration"],
 					$sub_type_data["storage"],
 					$sub_type_data["storage"]

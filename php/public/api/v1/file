@@ -6,7 +6,7 @@
 	RouteSetup();
 
 	$min_header_size = 1 + 1 + 6 + 8 + 8 + 104 + 16 + 1; // includes one byte of file_data, since its variable size
-	$max_header_size = ($min_header_size - 1) + 512;
+	$max_header_size = ($min_header_size - 1) + 255; //512;
 
 	$read_chunk_size = 10_000_000;
 
@@ -31,7 +31,7 @@
 
 
 			$db = new FileDatabase();
-			ExitResponse(ResponseType::Success, pack("Qa*", $read_chunk_size, json_encode($db->ListFiles($session->account_id, $data_id)))); // chunk size + list
+			ExitResponse(ResponseType::Success, pack("Pa*", $read_chunk_size, json_encode($db->ListFiles($session->account_id, $data_id)))); // chunk size + list
 
 		case "POST":
 			$session = HandleSession();

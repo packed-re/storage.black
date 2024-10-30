@@ -335,11 +335,13 @@ function GenerateEncryptionKey()
 	return CryptoJS.lib.WordArray.random(32);
 }
 
-// key needs to be of proper length otherwise SerializableCipher will break!!!! 
-function ShortEncrypt(data, key, padding = CryptoJS.pad.Pkcs7) // key is a WordArrays. data should be able to be both a WordArray and a string
-{
-	let iv = GenerateIV();
+const CipherPadSize = 16;
+const CipherHeaderSize = 8 + 32 + CipherPadSize;
+const CipherHeaderSizeWithIV = CipherHeaderSize + 16;
 
+// key needs to be of proper length otherwise SerializableCipher will break!!!! 
+function ShortEncrypt(data, key, iv, padding = CryptoJS.pad.Pkcs7) // key is a WordArrays. data should be able to be both a WordArray and a string
+{
 	let ciphertext = CryptoJS.AES.encrypt(data, key, {
 		mode: CryptoJS.mode.CBC,
 		padding: padding,
@@ -354,10 +356,7 @@ function ShortEncrypt(data, key, padding = CryptoJS.pad.Pkcs7) // key is a WordA
 		key.clone().concat(hmac_secret_salt)
 	);
 
-	return { // The IV needs to be seperated, so that in the unlikely case that a padding oracle attack is possible, at the very least the first block has the ability to stay hidden, if properly secured
-		iv: iv,
-		output: hmac_secret_salt.concat(cipher_hmac).concat(ciphertext)
-	};
+	return hmac_secret_salt.concat(cipher_hmac).concat(ciphertext);
 }
 
 function ShortDecrypt(data, key, iv, padding = CryptoJS.pad.Pkcs7) // everything is a word array
@@ -396,9 +395,9 @@ function ShortDecrypt(data, key, iv, padding = CryptoJS.pad.Pkcs7) // everything
 	return plaintext;
 }
 
-function CombineCipherIV(encr_object)
+function CombineCipherIV(cipher, iv)
 {
-	return encr_object.output.concat(encr_object.iv);
+	return cipher.concat(iv);
 }
 
 function ChopCipherIV(cipher)
@@ -408,14 +407,15 @@ function ChopCipherIV(cipher)
 	return iv;
 }
 
-function CompleteShortEncrypt(data, key, iv, padding = CryptoJS.pad.Pkcs7)
+function SimpleEncrypt(data, key, padding = CryptoJS.pad.Pkcs7)
 {
+	let iv = GenerateIV();
 	return CombineCipherIV(ShortEncrypt(
 		data, key, iv, padding
-	));
+	), iv);
 }
 
-function CompleteShortDecrypt(data, key, padding = CryptoJS.pad.Pkcs7)
+function SimpleDecrypt(data, key, padding = CryptoJS.pad.Pkcs7)
 {
 	let iv = ChopCipherIV(data);
 	return ShortDecrypt(
@@ -560,12 +560,15 @@ export {
 	GenerateUniqueDataID,
 	GenerateIV,
 	GenerateEncryptionKey,
+	CipherPadSize,
+	CipherHeaderSize,
+	CipherHeaderSizeWithIV,
 	ShortEncrypt,
 	ShortDecrypt,
 	CombineCipherIV,
 	ChopCipherIV,
-	CompleteShortEncrypt,
-	CompleteShortDecrypt,
+	SimpleEncrypt,
+	SimpleDecrypt,
 	Encryptor,
 	Decryptor
 };

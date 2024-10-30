@@ -18,8 +18,7 @@
 		CreateSession,
 		CheckSession,
 		FetchSessionEncryptionKey,
-		ClearSession,
-		StoreMasterKey
+		ClearSession
 	} from "$lib/session";
 
 	onMount(function(){

@@ -4,22 +4,18 @@
 	$_DEBUG = true;
 
 	$_valid_origins = [
-		"http://localhost:5173" => true // value can be whatever
+		"http://localhost:5173" => true
 	];
 
 	function get_cors_origin()
 	{
 		global $_valid_origins;
 
-		$origin = $_SERVER["HTTP_ORIGIN"];		
-		file_put_contents("buhbuhbuh.txt", $origin);
+		$origin = $_SERVER["HTTP_ORIGIN"];
 		if(isset($_valid_origins[$origin]))
 			return $origin;
 		
 		return false;
-
-		if(isset($_valid_origins[$origin]))
-			header("Access-Control-Allow-Origin: " . $origin);
 	}
 
 	function handle_cors()

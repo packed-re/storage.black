@@ -5,20 +5,23 @@
 	import {
 		CheckSession,
 		LogOut,
-		ClearSession
+		RebuildSession
 	} from "$lib/session";
 
-	import {
-		FetchFileList
-	} from "$lib/files";
-
+	let session_ready = false;
 	onMount(function(){
 		if(!CheckSession())
 			LogOut();
 		else
-			FetchFileList().then(function(_, v1, v2){
-				console.log(v1, v2);
-			})
+			RebuildSession().then(function(success){
+				session_ready = success;
+
+				if(!session_ready)
+				{
+					console.log("failed to rebuild session");
+					LogOut();
+				}
+			});
 	})
 </script>
 <style>
@@ -76,5 +79,10 @@
 		background-color: rgb(40, 40, 40);		
 	}
 </style>
-<button on:click={LogOut}>Log Out <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-log-out"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" x2="9" y1="12" y2="12"/></svg></button>
-<FileBrowser/>
+
+{#if session_ready === true}
+	<button on:click={LogOut}>Log Out <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-log-out"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" x2="9" y1="12" y2="12"/></svg></button>
+	<FileBrowser/>
+{:else}
+	<!-- loading screen goes here -->
+{/if}

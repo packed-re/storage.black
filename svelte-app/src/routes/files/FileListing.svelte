@@ -1,10 +1,40 @@
 <script>
 	export let name;
 	export let timestamp;
-	export let file_size;
+	export let file_size;	
 
-	let date = new Date(timestamp * 1000);
-	let date_string = date.getDate() + "/" + (date.getMonth() + 1) + "/" + date.getFullYear();
+	import {
+		LogN,
+		RoundN
+	} from "$lib/math";
+
+	const ByteUnits = [
+		"B",
+		"KB",
+		"MB",
+		"GB",
+		"TB",
+		"PB"
+	];
+
+	function FormatByteCount(bytes)
+	{
+		let byteUnitI = Math.floor(Math.floor(LogN(10, bytes) + 0.0001) / 3);
+		if(byteUnitI >= ByteUnits.length)
+			byteUnitI = ByteUnits.length - 1;
+		
+		let byteBase = Math.pow(10, 3 * byteUnitI);
+		let normalizedByteCount = RoundN(bytes / byteBase, 2);
+
+		return normalizedByteCount + " " + ByteUnits[byteUnitI];
+	}
+
+	function FormatUnixTimestamp(timestamp)
+	{
+		let date = new Date(timestamp * 1000);
+
+		return date.getDate() + "/" + (date.getMonth() + 1) + "/" + date.getFullYear();
+	}
 </script>
 <style>
 	button{
@@ -54,6 +84,6 @@
 </style>
 
 <td><div>{name}</div></td>
-<td><div>{date_string}</div></td>
-<td><div>{file_size}</div></td>
+<td><div>{FormatUnixTimestamp(timestamp)}</div></td>
+<td><div>{FormatByteCount(file_size)}</div></td>
 <td><div><button>Download</button></div></td>

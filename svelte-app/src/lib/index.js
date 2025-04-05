@@ -262,17 +262,23 @@ function Latin1ToUint8Array(str)
 	return out;
 }
 
-function WordArrayToUint8Array(word_array)
+function WordArrayToUint8Array(wordArray)
 {
-	let byteCount = word_array.sigBytes;
+	let byteCount = wordArray.sigBytes;
 	let out = new Uint8Array(byteCount);
 
 	for(let i = 0; i < byteCount; ++i)
 	{
-		out[i] = (word_array.words[i >>> 2] >>> (24 - 8 * (i % 4))) & 0xFF;
+		out[i] = (wordArray.words[i >>> 2] >>> (24 - 8 * (i % 4))) & 0xFF;
 	}
 
 	return out;
+}
+
+function DataViewWriteUint8Array(dataView, offset, uint8Array)
+{
+	for(let i = 0; i < uint8Array.length; ++i)
+		dataView.setUint8(offset + i, uint8Array[i]);
 }
 
 let _ArgonBaseKeySalt = WordArrayToUint8Array(CryptoJS.enc.Hex.parse("57d7f4ba75600c6992d9e0eb2e2f6b0e5b750276675cef0c9b112c54a2f1dd82"));
@@ -425,7 +431,7 @@ function SimpleDecrypt(data, key, padding = CryptoJS.pad.Pkcs7)
 
 class Encryptor
 {
-	constructor(source_blob, chunk_size, key) // key is a word array
+	constructor(source_blob, chunk_size, key, iv = null) // key is a word array
 	{
 		this._finished = false;
 
@@ -437,7 +443,7 @@ class Encryptor
 
 		this._stream_reader = this._source_blob.stream().getReader({mode: "byob"});
 
-		this.iv = GenerateIV();
+		this.iv = iv === null ? GenerateIV() : iv;
 		this.hmac_secret_salt = CryptoJS.lib.WordArray.random(8);
 
 		this._hmac_stream = CryptoJS.algo.HMAC.create(CryptoJS.algo.SHA256, key.clone().concat(this.hmac_secret_salt));
@@ -553,6 +559,7 @@ export {
 	Uint8ArrayToLatin1,
 	Latin1ToUint8Array,
 	WordArrayToUint8Array,
+	DataViewWriteUint8Array,
 	GenerateBaseKey,
 	GenerateAccountID,
 	GenerateMasterKey,

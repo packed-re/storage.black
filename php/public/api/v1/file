@@ -41,7 +41,8 @@
 					ResponseType::MissingArgument,
 					"file not provided"
 				);
-
+			//ExitResponse(ResponseType::BadArgument, json_encode($_FILES));
+			//ExitResponse(ResponseType::BadArgument,  $_FILES["file"]["size"] . " " . $min_header_size);
 			if($_FILES["file"]["size"] < $min_header_size)
 				ExitResponse(
 					ResponseType::BadArgument,
@@ -95,7 +96,10 @@
 						$read_chunk_size
 					));
 
-				case 1: // send
+				case 1: // send					
+					if($file_header->offset + ($_FILES["file"]["size"] - $meta_header_size) > $file_header->file_size)
+						ExitResponse(ResponseType::BadArgument, "attempting to write beyond file bounds ". $file_header->offset + ($_FILES["file"]["size"] - $meta_header_size) . " " . $file_header->file_size);
+
 					if(!$file_exists || $file_header->finished === true)
 					{
 						$db = new FileDatabase();
@@ -120,8 +124,6 @@
 					}
 
 					$file_content = fread($recv_file_handle, $_FILES["file"]["size"]);
-					if($file_header->offset + ($_FILES["file"]["size"] - $meta_header_size) > $file_header->file_size)
-						ExitResponse(ResponseType::BadArgument, "attempting to write beyond file bounds");
 
 					$write_file_handle = fopen($file_name, "cb");
 					fseek($write_file_handle, $file_header->offset);

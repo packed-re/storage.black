@@ -3,13 +3,16 @@ import {
 	WordArrayToUint8Array,
 	GenerateIV,
 	GenerateEncryptionKey,
+	CipherPadSize,
+	CipherHeaderSize,
 	CipherHeaderSizeWithIV,
 	ShortEncrypt,
 	ShortDecrypt,
 	CombineCipherIV,
 	ChopCipherIV,
 	SimpleEncrypt,
-	SimpleDecrypt
+	SimpleDecrypt,
+	Encryptor
 } from "$lib";
 
 import {
@@ -30,27 +33,25 @@ const ActionType = {
 
 class SBFileHeader
 {
-	constructor(SBFile)
+	constructor(sbfile)
 	{
-		let bufferSize = _base_header_len + this.file_data.length;
-
-		this.header_view = new DataView(new ArrayBuffer(bufferSize, {maxByteLength: bufferSize}));
+		this.header_view = new DataView(new ArrayBuffer(_base_header_len + sbfile.file_data.sigBytes));
 
 		this.header_view.setUint8(0, 0); // action_type
 		this.header_view.setUint8(1, 0); // finished
 
-		this.header_view.setBigUint64(8, 0, true); // offset
-		this.header_view.setBigUint64(16, SBFile.file_size, true); // file_size
+		this.header_view.setBigUint64(8, BigInt(0), true); // offset
+		this.header_view.setBigUint64(16, BigInt(sbfile.file_size), true); // file_size
 
-		let encryption_data_u8_array = WordArrayToUint8Array(SBFile.encryption_data);
+		let encryption_data_u8_array = WordArrayToUint8Array(sbfile.encryption_data);
 		for(let i = 0; i < 104; ++i)
 			this.header_view.setUint8(24 + i, encryption_data_u8_array[i]); // encryption_data
 
-		let data_id_u8_array = WordArrayToUint8Array(SBFile.data_id);
+		let data_id_u8_array = WordArrayToUint8Array(sbfile.data_id);
 		for(let i = 0; i < 16; ++i)
 			this.header_view.setUint8(128 + i, data_id_u8_array[i]); // data_id
 
-		let file_data_u8_array = WordArrayToUint8Array(SBFile.file_data);
+		let file_data_u8_array = WordArrayToUint8Array(sbfile.file_data);
 		for(let i = 0; i < file_data_u8_array.length; ++i)
 			this.header_view.setUint8(144 + i, file_data_u8_array[i]); // file_data
 	}
@@ -70,6 +71,11 @@ class SBFileHeader
 		this.header_view.setBigUint64(8, offset, true); // offset
 	}
 
+	GetOffset()
+	{
+		return this.header_view.getBigUint64(8, true);
+	}
+
 	GetBuffer()
 	{
 		return this.header_view.buffer
@@ -81,13 +87,14 @@ class SBFile
 	constructor(create_obj)
 	{
 		Object.assign(this, create_obj);
+		console.log(this)
 	}
 
 	static FromData(file_size, date, encryption_data, data_id, file_data, folder_key) // file_size, date, encryption_key, data_id, file_data
 	{
 		let obj = {};
 
-		obj.file_size = file_size;
+		obj.file_size = // Math.ceil((file_size + 1) / 16) * 16; - 
 		obj.date = date;
 		obj.encryption_data = encryption_data;
 		obj.data_id = data_id;
@@ -141,10 +148,10 @@ class SBFile
 
 		obj.info = {
 			name: file.name,
-			date: Fobj.date,
+			date: obj.date,
 			size: obj.file_size
 		};
-
+		console.log(obj);
 		return new SBFile(obj);
 	}
 
@@ -157,14 +164,12 @@ class SBFile
 	}
 }
 
-function FetchFileList()
+function FetchFileList(folder_data)
 {
 	return new Promise(function(resolver){
 		resolver(false);
-
-		let current_folder = GetCurrentFolderData();
 		
-		fetch(api_base + "file?data-id=" + current_folder.data_id.toString(CryptoJS.enc.Base64), {
+		fetch(api_base + "file?data-id=" + folder_data.data_id.toString(CryptoJS.enc.Base64), {
 			method: "GET",
 			credentials: "include"
 		}).then(async function(response){
@@ -196,14 +201,75 @@ function FetchFileList()
 	});
 }
 
-function UploadFile(file)
+function UploadFile(file, folder_data)
 {
-	let sbfile = SBFile.FromFile(file);
-	let request_header = sbfile.GetRequestHeader();
+	return new Promise(function(resolver){
+		let sbfile = SBFile.FromFile(file, folder_data);
+		let request_header = sbfile.GetRequestHeader();
 
-	request_header.SetActionType(ActionType.Upload);
-	request_header.SetFinished(false);
-	request_header.SetOffset(0);
+		request_header.SetActionType(ActionType.Upload);
+		request_header.SetFinished(false);
+		request_header.SetOffset(BigInt(CipherHeaderSize));
+
+		let chunk_size = 1_000_000;
+		let encryptor = new Encryptor(file, chunk_size, sbfile.encryption_key, sbfile.encryption_iv);
+
+		encryptor.EncryptChunk(function upload_data(ciphertext, done)
+		{
+			let header_buff = request_header.GetBuffer()
+			let formData = new FormData();
+			formData.set(
+				"file",
+				new Blob([header_buff, WordArrayToUint8Array(ciphertext)]),
+				"file"
+			);
+
+			fetch(api_base + "file", {
+				method: "POST",
+				credentials: "include",
+				body: formData,
+				headers: {
+					"sb-header-size": header_buff.byteLength
+				}
+			}).then(async function(response){
+				let status = new Uint8Array(await response.arrayBuffer(), 0, 1)[0];
+
+				if(status === 0)
+				{
+					if(!done)
+					{
+						request_header.SetOffset(BigInt(request_header.GetOffset() + BigInt(ciphertext.sigBytes)));
+						encryptor.EncryptChunk(upload_data);
+					}
+					else
+					{
+						header_buff = request_header.GetBuffer();
+						request_header.SetOffset(BigInt(0));
+						formData.set(
+							"",
+							new Blob([header_buff, WordArrayToUint8Array(ciphertext.RetrieveHMAC())]),
+							"file"
+						);
+
+						fetch(api_base + "file", {
+							method: "POST",
+							credentials: "include",
+							body: formData,
+							headers: {
+								"sb-header-size": header_buff.byteLength
+							}
+						}).then(async function(response){
+							let status = new Uint8Array(await response.arrayBuffer(), 0, 1)[0];
+
+							return resolver(status === 0);
+						})
+					}
+				}
+				else
+					return resolver(console.log("upload failed") || false)
+			});
+		});
+	});
 }
 
 function DownloadFile(sbfile)
@@ -217,5 +283,6 @@ function DeleteFile(sbfile)
 }
 
 export {
-	FetchFileList
+	FetchFileList,
+	UploadFile
 };

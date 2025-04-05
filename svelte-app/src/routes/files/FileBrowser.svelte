@@ -8,11 +8,13 @@
 	import {
 		CheckSession,
 		LogOut,
-		ClearSession
+		ClearSession,
+		GetCurrentFolderData
 	} from "$lib/session";
 
 	import {
-		FetchFileList
+		FetchFileList,
+		UploadFile
 	} from "$lib/files";
 
 	let sort_state = writable({
@@ -21,10 +23,23 @@
 	});
 
 	onMount(function(){
-		FetchFileList().then(function(success, v1, v2){
+		FetchFileList(GetCurrentFolderData()).then(function(success, v1, v2){
 			console.log(v1, v2);
 		});
-	})
+	});
+
+	function OnDrop(event)
+	{
+		console.log(123)
+
+		let item = event.dataTransfer.items[0];
+		if(item.kind !== "file")
+			return;
+
+		let file = item.getAsFile();
+		console.log("uploading", file.name);
+		UploadFile(file, GetCurrentFolderData());
+	}
 </script>
 <style>
 	#file-browser{
@@ -83,6 +98,13 @@
 	}
 </style>
 
+<!-- svelte-ignore a11y-no-static-element-interactions (kys svelte)--> 
+<div
+	on:dragover|preventDefault
+	on:drop|preventDefault={OnDrop}
+	
+	style="width: 100%; height: 100%"
+>
 	<table id="file-browser" border=0 cellspacing=0>
 		<thead>
 			<tr>
@@ -121,3 +143,4 @@
 			</tr>
 		</tbody>
 	</table>
+</div>

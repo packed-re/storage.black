@@ -9,7 +9,7 @@ RESPONSE SCHEME
 
 
 SESSION SCHEME (add check in route for the size of the account id. it has to be exactly 32 bytes)
-end_date + rand_long (8 bytes) + account id (total 48 bytes, without padding)
+end_date (8 bytes) + rand_long (8 bytes) + account id (total 48 bytes, without padding)
 enc key - base + ip
 
 enc key derivation scheme - rand_long + account_id + base_enc_key (diff than above) + ip

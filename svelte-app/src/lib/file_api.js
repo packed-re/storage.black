@@ -5,7 +5,7 @@ import {
 
 const API_BASE = "http://localhost/api/v1/"; 
 
-const MAKE_FILE_HEADER_MIN_SIZE = 128 + 8; // dataId + fileSize +? metadata
+const MAKE_FILE_HEADER_MIN_SIZE = 128 + 8; // dataId + fileSize | + metadata
 const FILE_UPLOAD_HEADER_SIZE = 128 + 8 + 8; // fileId + fileSize + filePointer
 const FILE_DOWNLOAD_HEADER_SIZE = 128 + 8 + 8 + 8; // fileId + fileSize + rangeStart + rangeEnd
 const FILE_TRANSFER_CHUNK_SIZE = 1_000_000; // 1 MB
@@ -29,11 +29,12 @@ class MakeFileRequest
 
 class FileTransferRequestBase
 {
-	constructor(requestHeader, fileId, fileSize)
+	constructor(requestHeader, fileId, fileSize, encryptionKey)
 	{
+		this.requestHeader = requestHeader; //new DataView(new ArrayBuffer(MAKE_FILE_HEADER_MIN_SIZE + metadata.sigBytes));
 		this.fileId = fileId;
 		this.fileSize = fileSize;
-		this.requestHeader = requestHeader; //new DataView(new ArrayBuffer(MAKE_FILE_HEADER_MIN_SIZE + metadata.sigBytes));
+		this.encryptionKey = encryptionKey;
 
 		DataViewWriteUint8Array(this.requestHeader, 0, this.fileId);
 		this.requestHeader.setBigUint64(128, BigInt(this.fileSize), true);
@@ -42,9 +43,11 @@ class FileTransferRequestBase
 
 class FileUploadRequest extends FileTransferRequestBase
 {
-	constructor(fileId, fileSize, file)
+	constructor(fileId, fileSize, encryptionKey, file)
 	{
-		super(new DataView(new ArrayBuffer(FILE_UPLOAD_HEADER_SIZE)), fileId, fileSize);
+		super(new DataView(new ArrayBuffer(FILE_UPLOAD_HEADER_SIZE)), fileId, fileSize, encryptionKey);
+		this.file = file;
+
 		this.lastChunk = false;
 		this.SetFilePointer(0);
 	}
@@ -79,34 +82,29 @@ class FileUploadRequest extends FileTransferRequestBase
 	Send()
 	{
 		
-		do
-		{
-			cipherText = encrypt(file[this.filePointer])
-			postData(new Blob([this.requestHeader, cipherText]));
-		} while (this.SetFilePointerNextChunk());
 	}
 }
 
 class FileDownloadRequest extends FileTransferRequestBase
 {
-	constructor(fileId, fileSize)
+	constructor(fileId, fileSize, encryptionKey)
 	{
-		super(new DataView(new ArrayBuffer(FILE_DOWNLOAD_HEADER_SIZE)), fileId, fileSize);
+		super(new DataView(new ArrayBuffer(FILE_DOWNLOAD_HEADER_SIZE)), fileId, fileSize, encryptionKey);
 
 		// this sets fileDownloadFrom and fileDownloadTo
-		this.SetFileRange(0, this.fileSize < FILE_TRANSFER_CHUNK_SIZE ? this.fileSize : FILE_TRANSFER_CHUNK_SIZE);
+		this.SetFileRange(0, Math.min(this.fileSize, FILE_TRANSFER_CHUNK_SIZE));
 	}
 
 	SetFileRange(from, to)
 	{		
 		if(from > Number.MAX_SAFE_INTEGER || to > Number.MAX_SAFE_INTEGER)
-			throw new RangeError("file download range values higher than Number.MAX_SAFE_INTEGER are currently unsupported");
+			throw new RangeError("file range values higher than Number.MAX_SAFE_INTEGER are currently unsupported");
 
 		if(from < 0 || to < 1)
-			throw new Error("file download range values can't be negative");
+			throw new Error("file range values can't be negative");
 
 		if(from >= to)
-			throw new Error("file download range from >= to");
+			throw new Error("file range from >= to");
 
 		this.requestHeader.setBigUint64(136 /* 128 + 8 */, BigInt(this.fileDownloadFrom = from));
 		this.requestHeader.setBigUint64(144 /* 128 + 16*/, BigInt(this.fileDownloadTo = to));
@@ -130,17 +128,17 @@ class FileDownloadRequest extends FileTransferRequestBase
 
 class NetworkedFile
 {
-	Download()
+	Download() // return blob
 	{
 
 	}
 
-	Rename()
+	Rename() // void, throw on failure
 	{
 
 	}
 
-	Delete()
+	Delete() // void, throw on failure
 	{
 
 	}

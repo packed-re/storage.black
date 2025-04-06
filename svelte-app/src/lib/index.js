@@ -504,6 +504,81 @@ class Encryptor
 	}
 }
 
+class Encryptor
+{
+	constructor(source_blob, chunk_size, key, iv = null) // key is a word array
+	{
+		this._finished = false;
+
+		this._source_blob = source_blob;
+		
+		this._chunk_size = chunk_size;
+		this._read_buffer = new ArrayBuffer(this._chunk_size + 65536 * 3); // Extra bytes so that the browser isn't forced to do extra unnececary logic for uneven memory allocation.
+		this._buffer_read_offset = 0;
+
+		this._stream_reader = this._source_blob.stream().getReader({mode: "byob"});
+
+		this.iv = iv === null ? GenerateIV() : iv;
+		this.hmac_secret_salt = CryptoJS.lib.WordArray.random(8);
+
+		this._hmac_stream = CryptoJS.algo.HMAC.create(CryptoJS.algo.SHA256, key.clone().concat(this.hmac_secret_salt));
+		this._aes_stream = CryptoJS.algo.AES.createEncryptor(key, {
+			mode: CryptoJS.mode.CBC,
+			padding: CryptoJS.pad.Pkcs7,
+			
+			iv: this.iv
+		});
+	}
+
+	EncryptChunk(callback) // callback called with ciphertext, done. When done is true, buffer is the final bit of encrypted data.
+	{
+		let _this = this;
+
+		this._stream_reader.read(new Uint8Array(this._read_buffer, this._buffer_read_offset)).then(function({value, done})
+		{
+			_this._read_buffer = value.buffer; // 65536
+			_this._buffer_read_offset += value.byteLength;
+
+			if(done) // despite how it may be presented in mdn, when the done parameter is set to true, value always points to an empty buffer, instead of undefined or the last chunk
+			{
+				_this._finished = true;
+
+				let ciphertext;
+				if(_this._buffer_read_offset > 0)
+					ciphertext = _this._aes_stream.process(Uint8ArrayToWordArray(new Uint8Array(_this._read_buffer, 0, _this._buffer_read_offset))).concat(_this._aes_stream.finalize());
+				else 
+					ciphertext = _this._aes_stream.finalize();
+
+				_this._hmac_stream.update(ciphertext);
+				return callback(ciphertext, done);
+			}
+			else if(_this._buffer_read_offset >= _this._chunk_size)
+			{
+				let ciphertext = _this._aes_stream.process(Uint8ArrayToWordArray(new Uint8Array(_this._read_buffer, 0, _this._buffer_read_offset)));
+				_this._buffer_read_offset = 0;
+
+				_this._hmac_stream.update(ciphertext);
+				return callback(ciphertext, done);
+			}
+
+			_this.EncryptChunk(callback); // keep executing until we've read the desired amount of memory
+		});
+	}
+
+	RetrieveHMAC() // returns hmac_salt.concat(hmac)
+	{
+		if(this._finished)
+		{
+			if(this._calculated_hmac === undefined)
+				this._calculated_hmac = this._hmac_stream.finalize();
+
+			return this._calculated_hmac;
+		}
+		else
+			throw "Encryptor.RetrieveHMAC called before stream finished";
+	}
+}
+
 class Decryptor
 {
 	constructor(key, iv, hmac_secret_salt, hmac) // everything is a WordArray

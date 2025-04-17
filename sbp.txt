@@ -40,7 +40,7 @@ setLocal(enc(enc(masterKey + dataId + folderKey, session.key), innerMasterKeyDec
 
 
 dataId
-metadata - 1 byte to denote whether its a file or folder + 16 bytes of denote random data used to derive encryption key + var length name
+metadata - 1 byte to denote whether its a file or folder + 16 bytes of random data used to derive encryption key + var length name
 fileId
 
 folder content - dataId + folderKeySalt

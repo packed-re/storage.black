@@ -79,7 +79,7 @@ class FileUploadRequest extends FileTransferRequestBase
 		return true;
 	}
 
-	Send()
+	UploadChunk()
 	{
 		
 	}
@@ -90,6 +90,8 @@ class FileDownloadRequest extends FileTransferRequestBase
 	constructor(fileId, fileSize, encryptionKey)
 	{
 		super(new DataView(new ArrayBuffer(FILE_DOWNLOAD_HEADER_SIZE)), fileId, fileSize, encryptionKey);
+
+		this.maxDownload = maxDownload;
 
 		// this sets fileDownloadFrom and fileDownloadTo
 		this.SetFileRange(0, Math.min(this.fileSize, FILE_TRANSFER_CHUNK_SIZE));
@@ -119,7 +121,7 @@ class FileDownloadRequest extends FileTransferRequestBase
 		return true;
 	}
 
-	Send()
+	DownloadChunk()
 	{
 		
 	}
@@ -128,6 +130,17 @@ class FileDownloadRequest extends FileTransferRequestBase
 
 class NetworkedFile
 {
+	constructor(folderKey, fileId, metadata)
+	{
+		this.folderKey = folderKey;
+		this.fileId = fileId;
+		this.metadata = metadata;
+
+		
+
+		this.isFolder = false;
+	}
+
 	Download() // return blob
 	{
 

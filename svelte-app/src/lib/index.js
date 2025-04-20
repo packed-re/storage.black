@@ -114,7 +114,7 @@ function SliceWordArray(wa, start, end) // end is not included
 }
 
 // atleast 2x faster than SliceWordArray
-function ChopWordArray(wa, start, end) // same as above but does the slicing on the given array, instead of a newly created one
+function ChopWordArray(wa, start, end) // same as above but does the slicing on the given array, instead of a newly created one. it keeps whatever part was selected by start and end
 {	
 	if(end === undefined)
 		end = wa.sigBytes;
@@ -193,9 +193,9 @@ function RotateUInt32(ui32)
 }
 
 // the gain in speed, compared to Uint8ArrayToWordArray, varies a lot, but tends to be around the 2x mark
-function ArrayBufferToWordArray(array_buffer) // for the sake of speed, this destroys the input array buffer. If you need it for something else afterwards, you should pass this function a copy by doing .slice(0)
+function ArrayBufferToWordArray(arrayBuffer) // for the sake of speed, this destroys the input array buffer. If you need it for something else afterwards, you should pass this function a copy by doing .slice(0)
 {
-	let byteCount = array_buffer.byteLength;
+	let byteCount = arrayBuffer.byteLength;
 	let words = [];
 
 	let leftOverByteCount  = byteCount % 4;
@@ -205,11 +205,11 @@ function ArrayBufferToWordArray(array_buffer) // for the sake of speed, this des
 	let leftOverBytes;
 	if(leftOverByteCount !== 0)
 	{
-		leftOverBytes = new Uint8Array(array_buffer.slice(dwordStride));
-		array_buffer = array_buffer.transfer(dwordStride);
+		leftOverBytes = new Uint8Array(arrayBuffer.slice(dwordStride));
+		arrayBuffer = arrayBuffer.transfer(dwordStride);
 	}
 
-	uint32_array = new Uint32Array(array_buffer);
+	uint32_array = new Uint32Array(arrayBuffer);
 	let dwordCount = dwordStride / 4;
 
 	for(let i = 0; i < dwordCount; ++i)
@@ -230,8 +230,8 @@ function Uint8ArrayToWordArray(uint8arr)
 
 	for(let i = 0; i < byteCount; ++i)
 	{
-		let word_i = i >>> 2
-		words[word_i] = (words[word_i] << 8) + uint8arr[i]; 																																																	// WARNING! WARNING! WARNING! CHROME IS FUCKING DOGSHIT AND WILL THROW A RANGEERROR AT AN ARBITRARY ARRAY LENGTH (50139473 when testied). BE EXCEPTIONALLY CAUTIOUS WITH CHROMIUM CLIENTS.
+		let word_i = i >>> 2; // div by 4
+		words[word_i] = (words[word_i] << 8) | uint8arr[i]; // if theres issues replace | with +																																																	// WARNING! WARNING! WARNING! CHROME IS FUCKING DOGSHIT AND WILL THROW A RANGEERROR AT AN ARBITRARY ARRAY LENGTH (50139473 when tested). BE EXCEPTIONALLY CAUTIOUS WITH CHROMIUM CLIENTS.
 	}
 
 	if(byteCount % 4 !== 0)

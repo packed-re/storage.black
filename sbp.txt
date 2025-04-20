@@ -39,11 +39,12 @@ setLocal(outerMasterKeyDecryptionKey)
 setLocal(enc(enc(masterKey + dataId + folderKey, session.key), innerMasterKeyDecryptionKey))
 
 
-dataId
+dataId - 16 bytes
 metadata - 1 byte to denote whether its a file or folder + 16 bytes of random data used to derive encryption key + var length name
-fileId
+	max length is 240 bytes, including padding. meaning the max length metadata can be is 207 bytes
+fileId - 16 bytes
 
-folder content - dataId + folderKeySalt
+folder content - dataId + folderKeySalt (16 bytes)
 
 folderKey = hmac(masterKey + folderDataId, folderKeySalt)
 

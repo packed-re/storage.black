@@ -1,7 +1,16 @@
 import {
+	SliceWordArray,
+	ChopWordArray,
+	ArrayBufferToWordArray,
+	Uint8ArrayToWordArray,
 	WordArrayToUint8Array,
-	DataViewWriteUint8Array
+	DataViewWriteUint8Array,
+	SimpleEncrypt,
+	SimpleDecrypt
 } from "$lib";
+
+import CryptoJS from "crypto-js";
+import { ArrayBufferToWordArray, ChopWordArray, SliceWordArray } from ".";
 
 const API_BASE = "http://localhost/api/v1/"; 
 
@@ -9,6 +18,25 @@ const MAKE_FILE_HEADER_MIN_SIZE = 128 + 8; // dataId + fileSize | + metadata
 const FILE_UPLOAD_HEADER_SIZE = 128 + 8 + 8; // fileId + fileSize + filePointer
 const FILE_DOWNLOAD_HEADER_SIZE = 128 + 8 + 8 + 8; // fileId + fileSize + rangeStart + rangeEnd
 const FILE_TRANSFER_CHUNK_SIZE = 1_000_000; // 1 MB
+
+let GlobalState = undefined;
+
+function SetGlobalState(masterKey)
+{
+	GlobalState = {
+		masterKey: masterKey
+	};
+}
+
+function RetrieveGlobalState() // returns bool based on if one is active
+{
+
+}
+
+function Login(passkey)
+{
+
+}
 
 class MakeFileRequest
 {
@@ -130,25 +158,40 @@ class FileDownloadRequest extends FileTransferRequestBase
 
 class NetworkedFile
 {
-	constructor(folderKey, fileId, metadata)
+	constructor(folderKey, fileId, metadata) // everything is expected to be a word array
 	{
-		this.folderKey = folderKey;
-		this.fileId = fileId;
-		this.metadata = metadata;
+		this.raw = {
+			folderKey: folderKey,
+			fileId: fileId,
+			metadata: {
+				value: metadata,
+				key: CryptoJS.HmacSHA256(folderKey, fileId)
+			},
+			encryptionKey: undefined
+		};
 
-		
+		let metadataPlain = SimpleDecrypt(this.metadata.value, this.metadata.key);
+		if((metadataPlain.words[0] & 0xFF000000) >>> 24 == 0) // first byte, the folder flag
+			this.isFolder = false;
+		else
+			this.isFolder = true;
 
-		this.isFolder = false;
+		this.raw.encryptionKeyRand = SliceWordArray(this.metadataPlain, 1, 17);
+		this.raw.encryptionKey = CryptoJS.HmacSHA256(folderKey, this.encryptionKeyRand);
+
+		this.name = new TextDecoder().decode(WordArrayToUint8Array(SliceWordArray(this.metadataPlain, 17)));
 	}
+
+
 
 	Download() // return blob
 	{
-
+		return new Promise();
 	}
 
 	Rename() // void, throw on failure
 	{
-
+		throw new Error("not implemented yet");
 	}
 
 	Delete() // void, throw on failure
@@ -159,9 +202,66 @@ class NetworkedFile
 
 class FolderState
 {
+	constructor(dataId, folderKey, name = "") // both should be word arrays
+	{
+		this.dataId = dataId;
+		this.folderKey = folderKey;
+
+		this.name = name;
+	}
+
+	static FromNetworkedFile(netFile) // this will probably require a promise as it will have to download the folder data
+	{
+		if(netFile.isFolder !== true)
+			throw new Error("NetworkedFile given to FolderState.FromNetworkedFile is not a folder");
+
+		return new Promise(function(resolve){
+			netFile.Download().then(function(blob){
+				let data = ArrayBufferToWordArray(blob.arrayBuffer());
+
+				let keySalt = SliceWordArray(data, 16);
+				let dataId = ChopWordArray(data, 0, 16);
+
+				resolve(new FolderState(
+					dataId,
+					CryptoJS.HmacSHA256(
+						new CryptoJS.lib.WordArray.init([], 0).concat(GlobalState.masterKey).concat(dataId),
+						keySalt
+					)
+				));
+			});
+		});
+	}
+
 	ListFiles()
 	{
-	
+		let listBuffer = new Uint8Array(100);
+
+		let outputFiles = [];
+
+		let fileObjBase = 0;
+		while (fileObjBase < listBuffer.length)
+		{
+			let fileLen = listBuffer[fileObjBase] + 1; // + 1 because it doesn't include the length byte
+
+			if(fileLen === 1)
+				throw new Error(`File object length in list buffer is null. Object base - ${fileObjBase}`);
+
+			if((fileObjBase + fileLen) > listBuffer.length)
+				throw new Error(`File object length points outside the bounds of the list buffer. Object base - ${fileObjBase} | Object length - ${fileLen}`);
+
+			if(fileLen > 240)
+				throw new Error(`File object length in list buffer is too long (>240). Object base - ${fileObjBase} | Object length - ${fileLen}`);
+
+			let fileData = listBuffer.slice(fileObjBase, fileObjBase + fileLen);
+			let fileId = Uint8ArrayToWordArray(fileData.slice(0, 16));
+			let metadata = Uint8ArrayToWordArray(fileData.slice(16));
+
+			outputFiles.push(new NetworkedFile(this.folderKey, fileId, metadata));
+			fileObjBase += fileLen;
+		}
+
+		return outputFiles;
 	}
 
 	UploadFile(file) // MakeFileRequest -> FileUploadRequest. Return NetworkedFile

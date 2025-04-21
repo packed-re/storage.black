@@ -1,4 +1,5 @@
 import {
+	CryptoJS,
 	SliceWordArray,
 	ChopWordArray,
 	ArrayBufferToWordArray,
@@ -8,9 +9,6 @@ import {
 	SimpleEncrypt,
 	SimpleDecrypt
 } from "$lib";
-
-import CryptoJS from "crypto-js";
-import { ArrayBufferToWordArray, ChopWordArray, SliceWordArray } from ".";
 
 const API_BASE = "http://localhost/api/v1/"; 
 
@@ -158,7 +156,7 @@ class FileDownloadRequest extends FileTransferRequestBase
 
 class NetworkedFile
 {
-	constructor(folderKey, fileId, metadata) // everything is expected to be a word array
+	constructor(folderKey, fileId, metadata, fileSize) // everything is expected to be a word array
 	{
 		this.raw = {
 			folderKey: folderKey,
@@ -167,8 +165,13 @@ class NetworkedFile
 				value: metadata,
 				key: CryptoJS.HmacSHA256(folderKey, fileId)
 			},
+			fileSize: fileSize,
+			encryptionKeyRand: undefined,
 			encryptionKey: undefined
 		};
+
+		if(this.raw.fileSize.number > Number.MAX_SAFE_INTEGER)
+			throw new Error("NetworkFile currently doesn't support a fileSize larger than Number.MAX_SAFE_INTEGER");
 
 		let metadataPlain = SimpleDecrypt(this.metadata.value, this.metadata.key);
 		if((metadataPlain.words[0] & 0xFF000000) >>> 24 == 0) // first byte, the folder flag
@@ -180,6 +183,7 @@ class NetworkedFile
 		this.raw.encryptionKey = CryptoJS.HmacSHA256(folderKey, this.encryptionKeyRand);
 
 		this.name = new TextDecoder().decode(WordArrayToUint8Array(SliceWordArray(this.metadataPlain, 17)));
+		this.fileSize = Number(BigUint64Array(WordArrayToUint8Array(fileSize).buffer)[0]);
 	}
 
 
@@ -213,7 +217,10 @@ class FolderState
 	static FromNetworkedFile(netFile) // this will probably require a promise as it will have to download the folder data
 	{
 		if(netFile.isFolder !== true)
-			throw new Error("NetworkedFile given to FolderState.FromNetworkedFile is not a folder");
+			throw new Error("NetworkedFile is not a folder");
+		
+		if(netFile.fileSize != 32)
+			throw new Error("NetworkedFile fileSize expected to be exactly 32 bytes, but received " + netFile.fileSize.toString());
 
 		return new Promise(function(resolve){
 			netFile.Download().then(function(blob){

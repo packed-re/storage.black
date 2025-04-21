@@ -41,14 +41,14 @@ setLocal(enc(enc(masterKey + dataId + folderKey, session.key), innerMasterKeyDec
 
 dataId - 16 bytes
 metadata - 1 byte to denote whether its a file or folder + 16 bytes of random data used to derive encryption key + var length name
-	max length is 240 bytes, including padding. meaning the max length metadata can be is 207 bytes
+	max length is 240 bytes, including padding. meaning the max length name can be is 207 bytes
 fileId - 16 bytes
 
 folder content - dataId + folderKeySalt (16 bytes)
 
 folderKey = hmac(masterKey + folderDataId, folderKeySalt)
 
-metadataEncryptionKey = hmac(folderKey, fileId)
+metadataEncryptionKey = folderKey//hmac(folderKey, fileId)
 encryptionKey - hmac(folderKey, fileRand)
 
 makefile(data_id, metadata, file_size)

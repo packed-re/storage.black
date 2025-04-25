@@ -70,7 +70,7 @@
 	{
 		if(!isset($_COOKIE["session"]))
 			ExitResponse(
-				ResponseType::SessionExpired
+				ResponseType::SessionExpired,"not set"
 			);
 			
 		$session_decoded = base64_decode($_COOKIE["session"], true);
@@ -80,7 +80,7 @@
 
 			ExitResponse(
 				ResponseType::SessionExpired // to be safe, we shouldn't give the client too much information about the state of the server
-			);
+			,"sessio bad format or length");
 		}
 
 		$session = Session::FromToken($session_decoded);
@@ -91,7 +91,7 @@
 		else
 		{
 			RemoveCookie("session");				
-			ExitResponse(ResponseType::SessionExpired);
+			ExitResponse(ResponseType::SessionExpired, "failed to decode session");
 		}
 	}
 ?>

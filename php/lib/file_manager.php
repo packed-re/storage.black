@@ -5,6 +5,21 @@
 	
 	$___name_hash_salt = hex2bin("a2c90fe3dfab12c3799ad5a0b2b7e355");
 
+
+	function GetManagedFileNameFromHash($hash) // we use this in DeleteUnfinishedFiles
+	{
+		return $_SERVER["DOCUMENT_ROOT"] . "/../files/" . bin2hex(ByteSubString($hash, 0, 16) ^ ByteSubString($hash, 16));
+	}
+
+	function GetManagedFileName($account_hash, $file_id, $fileSizeBuff)
+	{
+		global $___name_hash_salt;
+
+		return FileDatabase::GetManagedFileNameFromHash(
+			hash_hmac("sha256", $file_id . $fileSizeBuff, hash_hmac("sha256", $account_hash, $___name_hash_salt), true)
+		);
+	}
+
 	class FileHeader
 	{
 		public $action; // int

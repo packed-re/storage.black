@@ -119,7 +119,7 @@
 
 	$___response_encryption_key = hex2bin("98b32fc776e8497d26f594d02eed92746eb1adc8f77fb6ca1cf8674e38bf6a77");
 
-	function CreateSecureResponseData($data) // for data we want to return to the client without letting it know its raw contents
+	function CreateSecureResponseData($data) // for data we want to return to the client without letting it know its actual contents
 	{
 		global $_DEBUG;
 		global $___response_encryption_key;
@@ -180,5 +180,13 @@
 		}
 
 		return $out;
+	}
+
+	function ReadBinaryRequestData()
+	{
+		if(array_key_exists("data", $_FILES))
+			return file_get_contents($_FILES["data"]["tmp_name"]);
+
+		return null;
 	}
 ?>

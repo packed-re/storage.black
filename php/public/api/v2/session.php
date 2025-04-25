@@ -18,7 +18,8 @@
 		case "GET":
 			if(!isset($_COOKIE["session"]))
 				ExitResponse(
-					ResponseType::SessionExpired
+					ResponseType::SessionExpired,
+					"cookie not set"
 				);
 			
 			$session_decoded = base64_decode($_COOKIE["session"], true);
@@ -27,8 +28,7 @@
 				RemoveCookie("session");
 
 				ExitResponse(
-					ResponseType::SessionExpired // to be safe, we shouldn't give the client too much information about the state of the server
-					, "buh"
+					ResponseType::SessionExpired, "session is bad length"
 				);
 			}
 
@@ -40,44 +40,24 @@
 			else
 			{
 				RemoveCookie("session");				
-				ExitResponse(ResponseType::SessionExpired);
+				ExitResponse(ResponseType::SessionExpired, "failed to decode");
 			}
 
 		case "POST":
-			$request_data = GetAllRequestData();
-			if(!isset($request_data["age"]))
+			$data = ReadBinaryRequestData();
+			if($data === null)
 				ExitResponse(
 					ResponseType::MissingArgument,
-					"age not provided"
-				);
-			
-			$age = intval($request_data["age"]);
-			if($age === 0)
-				ExitResponse(
-					ResponseType::BadArgument,
-					"age is invalid"
-				);
-			
-			if(!isset($request_data["account_id"]))
-				ExitResponse(
-					ResponseType::MissingArgument,
-					"account_id not provided"
+					"no data sent to server"
 				);
 
-			$account_id_decoded = base64_decode($request_data["account_id"], true);
-			if($account_id_decoded === false)
+			if(ByteStringLength($data) !== 32)
 				ExitResponse(
 					ResponseType::BadArgument,
-					"account_id is invalid"
+					"account id is of improper length"
 				);
-
-			if(ByteStringLength($account_id_decoded) !== 32)
-				ExitResponse(
-					ResponseType::BadArgument,
-					"account_id should be 32 bytes"
-				);
-			
-			$new_session = Session::Make($age, $account_id_decoded);
+			$age = 30 * 24 * 60 * 60; // 30 days
+			$new_session = Session::Make($age, $data);
 
 			setcookie("session", base64_encode($new_session->ToToken()), [
 				"expires" => time() + $age,

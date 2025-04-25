@@ -1,5 +1,22 @@
 import CryptoJS from "crypto-js";
 
+function SetCookie(name, value="", age=0) {
+	document.cookie = name + "=" + encodeURIComponent(value) + "; max-age=" + age;
+}
+
+function GetCookie(name) {
+	let cookies = document.cookie.split(";");
+    
+	for(let i = 0; i < cookies.length; i++)
+	{
+		let cookiePair = cookies[i].split("=");
+		if(cookiePair[0].trim() === name)
+			return decodeURIComponent(cookiePair[1]);
+	}
+    
+	return null;
+}
+
 // returns true if equal
 function CompareWordArrays(wa1, wa2)
 {
@@ -285,6 +302,7 @@ let _ArgonBaseKeySalt = WordArrayToUint8Array(CryptoJS.enc.Hex.parse("57d7f4ba75
 let _AccountIDSalt = CryptoJS.enc.Hex.parse("5d54dfe28d8adb0a63fff0e518db2bed2eaedef5fd34084bc14f328f21832ba0");
 let _MasterKeySalt = CryptoJS.enc.Hex.parse("170a3530f5d5bde9156e86a539b1b7500b40b6a7caa163e0f819f2ce9745adb8");
 let _BaseDataIDSalt = CryptoJS.enc.Hex.parse("a03a0527ac9c906ad6dde127c16413a003d5fbc299eeb1562133cb8f997d2bec");
+let _BaseFolderKeySalt = CryptoJS.enc.Hex.parse("7650c988b786fc83e75709de37cba571dc305b4d9d4cdf52a947036774230056");
 
 // Use this only when the page has loaded
 function GenerateBaseKey(pass)
@@ -307,23 +325,28 @@ function GenerateBaseKey(pass)
 	return promise;
 }
 
-function GenerateAccountID(base_key)
+function GenerateAccountID(baseKey)
 {
-	return CryptoJS.HmacSHA256(base_key, _AccountIDSalt);
+	return CryptoJS.HmacSHA256(baseKey, _AccountIDSalt);
 }
 
-function GenerateMasterKey(base_key)
+function GenerateMasterKey(baseKey)
 {
-	return CryptoJS.HmacSHA256(base_key, _MasterKeySalt);
+	return CryptoJS.HmacSHA256(baseKey, _MasterKeySalt);
 }
 
-function GenerateBaseDataID(base_key)
+function GenerateBaseDataID(baseKey)
 {
-	let hash = CryptoJS.HmacSHA256(base_key, _BaseDataIDSalt);
+	let hash = CryptoJS.HmacSHA256(baseKey, _BaseDataIDSalt);
 	let firstHalf = SliceWordArray(hash, 0, 16); // i should make a function that skips the slicing part and directly xors halves, but im out of time so
 	let secondHalf = SliceWordArray(hash, 16);
 	
 	return XORWordArrays(firstHalf, secondHalf);
+}
+
+function GenerateBaseFolderKeySalt(baseKey)
+{
+	return CryptoJS.HmacSHA256(baseKey, _BaseFolderKeySalt);
 }
 
 function GenerateUniqueDataID()
@@ -429,201 +452,9 @@ function SimpleDecrypt(data, key, padding = CryptoJS.pad.Pkcs7)
 	);
 }
 
-class Encryptor
-{
-	constructor(source_blob, chunk_size, key, iv = null) // key is a word array
-	{
-		this._finished = false;
-
-		this._source_blob = source_blob;
-		
-		this._chunk_size = chunk_size;
-		this._read_buffer = new ArrayBuffer(this._chunk_size + 65536 * 3); // Extra bytes so that the browser isn't forced to do extra unnececary logic for uneven memory allocation.
-		this._buffer_read_offset = 0;
-
-		this._stream_reader = this._source_blob.stream().getReader({mode: "byob"});
-
-		this.iv = iv === null ? GenerateIV() : iv;
-		this.hmac_secret_salt = CryptoJS.lib.WordArray.random(8);
-
-		this._hmac_stream = CryptoJS.algo.HMAC.create(CryptoJS.algo.SHA256, key.clone().concat(this.hmac_secret_salt));
-		this._aes_stream = CryptoJS.algo.AES.createEncryptor(key, {
-			mode: CryptoJS.mode.CBC,
-			padding: CryptoJS.pad.Pkcs7,
-			
-			iv: this.iv
-		});
-	}
-
-	EncryptChunk(callback) // callback called with ciphertext, done. When done is true, buffer is the final bit of encrypted data.
-	{
-		let _this = this;
-
-		this._stream_reader.read(new Uint8Array(this._read_buffer, this._buffer_read_offset)).then(function({value, done})
-		{
-			_this._read_buffer = value.buffer; // 65536
-			_this._buffer_read_offset += value.byteLength;
-
-			if(done) // despite how it may be presented in mdn, when the done parameter is set to true, value always points to an empty buffer, instead of undefined or the last chunk
-			{
-				_this._finished = true;
-
-				let ciphertext;
-				if(_this._buffer_read_offset > 0)
-					ciphertext = _this._aes_stream.process(Uint8ArrayToWordArray(new Uint8Array(_this._read_buffer, 0, _this._buffer_read_offset))).concat(_this._aes_stream.finalize());
-				else 
-					ciphertext = _this._aes_stream.finalize();
-
-				_this._hmac_stream.update(ciphertext);
-				return callback(ciphertext, done);
-			}
-			else if(_this._buffer_read_offset >= _this._chunk_size)
-			{
-				let ciphertext = _this._aes_stream.process(Uint8ArrayToWordArray(new Uint8Array(_this._read_buffer, 0, _this._buffer_read_offset)));
-				_this._buffer_read_offset = 0;
-
-				_this._hmac_stream.update(ciphertext);
-				return callback(ciphertext, done);
-			}
-
-			_this.EncryptChunk(callback); // keep executing until we've read the desired amount of memory
-		});
-	}
-
-	RetrieveHMAC() // returns hmac_salt.concat(hmac)
-	{
-		if(this._finished)
-		{
-			if(this._calculated_hmac === undefined)
-				this._calculated_hmac = this._hmac_stream.finalize();
-
-			return this._calculated_hmac;
-		}
-		else
-			throw "Encryptor.RetrieveHMAC called before stream finished";
-	}
-}
-
-class Encryptor
-{
-	constructor(source_blob, chunk_size, key, iv = null) // key is a word array
-	{
-		this._finished = false;
-
-		this._source_blob = source_blob;
-		
-		this._chunk_size = chunk_size;
-		this._read_buffer = new ArrayBuffer(this._chunk_size + 65536 * 3); // Extra bytes so that the browser isn't forced to do extra unnececary logic for uneven memory allocation.
-		this._buffer_read_offset = 0;
-
-		this._stream_reader = this._source_blob.stream().getReader({mode: "byob"});
-
-		this.iv = iv === null ? GenerateIV() : iv;
-		this.hmac_secret_salt = CryptoJS.lib.WordArray.random(8);
-
-		this._hmac_stream = CryptoJS.algo.HMAC.create(CryptoJS.algo.SHA256, key.clone().concat(this.hmac_secret_salt));
-		this._aes_stream = CryptoJS.algo.AES.createEncryptor(key, {
-			mode: CryptoJS.mode.CBC,
-			padding: CryptoJS.pad.Pkcs7,
-			
-			iv: this.iv
-		});
-	}
-
-	EncryptChunk(callback) // callback called with ciphertext, done. When done is true, buffer is the final bit of encrypted data.
-	{
-		let _this = this;
-
-		this._stream_reader.read(new Uint8Array(this._read_buffer, this._buffer_read_offset)).then(function({value, done})
-		{
-			_this._read_buffer = value.buffer; // 65536
-			_this._buffer_read_offset += value.byteLength;
-
-			if(done) // despite how it may be presented in mdn, when the done parameter is set to true, value always points to an empty buffer, instead of undefined or the last chunk
-			{
-				_this._finished = true;
-
-				let ciphertext;
-				if(_this._buffer_read_offset > 0)
-					ciphertext = _this._aes_stream.process(Uint8ArrayToWordArray(new Uint8Array(_this._read_buffer, 0, _this._buffer_read_offset))).concat(_this._aes_stream.finalize());
-				else 
-					ciphertext = _this._aes_stream.finalize();
-
-				_this._hmac_stream.update(ciphertext);
-				return callback(ciphertext, done);
-			}
-			else if(_this._buffer_read_offset >= _this._chunk_size)
-			{
-				let ciphertext = _this._aes_stream.process(Uint8ArrayToWordArray(new Uint8Array(_this._read_buffer, 0, _this._buffer_read_offset)));
-				_this._buffer_read_offset = 0;
-
-				_this._hmac_stream.update(ciphertext);
-				return callback(ciphertext, done);
-			}
-
-			_this.EncryptChunk(callback); // keep executing until we've read the desired amount of memory
-		});
-	}
-
-	RetrieveHMAC() // returns hmac_salt.concat(hmac)
-	{
-		if(this._finished)
-		{
-			if(this._calculated_hmac === undefined)
-				this._calculated_hmac = this._hmac_stream.finalize();
-
-			return this._calculated_hmac;
-		}
-		else
-			throw "Encryptor.RetrieveHMAC called before stream finished";
-	}
-}
-
-class Decryptor
-{
-	constructor(key, iv, hmac_secret_salt, hmac) // everything is a WordArray
-	{
-		this._hmac = hmac;
-
-		this._stream_reader = this._source_blob.stream().getReader({mode: "byob"});
-
-		this._hmac_stream = CryptoJS.algo.HMAC.create(CryptoJS.algo.SHA256, key.clone().concat(hmac_secret_salt));
-		this._aes_stream = CryptoJS.algo.AES.createDecryptor(key, {
-			mode: CryptoJS.mode.CBC,
-			padding: CryptoJS.pad.Pkcs7,
-			
-			iv: iv
-		});
-	}
-
-	DecryptChunk(chunk) // chunk is expected to be a WordArray
-	{
-		this._hmac_stream.process(chunk);
-		return this._aes_stream.process(chunk);
-	}
-
-	Finalize()
-	{
-		this._finished = true;
-		return this._aes_stream.finalize();
-	}
-
-	ValidHMAC() // returns bool
-	{
-		if(this._finished)
-		{
-			if(this._hmac_matches === undefined)
-				this._hmac_matches = CompareWordArrays(this._hmac, this._hmac_stream.finalize());
-			
-			return this._hmac_matches;
-		}
-		else
-			throw "Decryptor.ValidHMAC called before stream finished";
-	}
-}
-
-
 export {
+	SetCookie,
+	GetCookie,
 	CryptoJS,
 	CompareWordArrays,
 	XORWordArrays,
@@ -639,6 +470,7 @@ export {
 	GenerateAccountID,
 	GenerateMasterKey,
 	GenerateBaseDataID,
+	GenerateBaseFolderKeySalt,	
 	GenerateUniqueDataID,
 	GenerateIV,
 	GenerateEncryptionKey,
@@ -650,7 +482,5 @@ export {
 	CombineCipherIV,
 	ChopCipherIV,
 	SimpleEncrypt,
-	SimpleDecrypt,
-	Encryptor,
-	Decryptor
+	SimpleDecrypt
 };

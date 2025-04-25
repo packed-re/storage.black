@@ -21,6 +21,10 @@
 		ClearSession
 	} from "$lib/session";
 
+	import {
+		Login
+	} from "$lib/file_api";
+
 	onMount(function(){
 		if(CheckSession())			
 			window.location.replace("/files");
@@ -43,9 +47,7 @@
 		generating_base_key = true;
 
 		status_box_data.open = true;
-		GenerateBaseKey(passcode_input.value).then(function(account_base_key){	
-			account_base_key = Uint8ArrayToWordArray(account_base_key.hash);
-
+		Login(passcode_input.value).then(function(){
 			status_box_data.state = "finished";
 			status_box_data.text = "Key Successfully Generated!"
 
@@ -54,13 +56,7 @@
 
 				setTimeout(function(){
 					status_box_data.state = "loading";
-
-					CreateSession(
-						account_base_key					
-					).then(function(session_key){
-						if(session_key)
-							window.location.replace("/files");
-					});
+					window.location.replace("/files");
 				}, 500);
 			}, 1000)
 		});

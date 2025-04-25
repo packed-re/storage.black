@@ -2,49 +2,109 @@
     import { onMount } from "svelte";
     import { writable } from "svelte/store";
 
+	import { LoadSession } from "$lib/file_api";
+
 	import SortButton from "./SortButton.svelte";
 	import FileListing from "./FileListing.svelte";
-
-	import {
-		CheckSession,
-		LogOut,
-		ClearSession,
-		GetCurrentFolderData
-	} from "$lib/session";
-
-	import {
-		FetchFileList,
-		UploadFile
-	} from "$lib/files";
 
 	let sort_state = writable({
 		name: "Upload Date",
 		state: null//"DESC"
 	});
 
-	onMount(function(){
-		FetchFileList(GetCurrentFolderData()).then(function(success, v1, v2){
-			console.log(v1, v2);
-		});
-	});
+	let fileListingTableBody;
 
-	function OnDrop(event)
+	function ListNetFiles(netFiles)
 	{
-		console.log(123)
+		while(fileListingTableBody.firstChild)
+			fileListingTableBody.removeChild(fileListingTableBody.firstChild);
 
-		let item = event.dataTransfer.items[0];
-		if(item.kind !== "file")
-			return;
-
-		let file = item.getAsFile();
-		console.log("uploading", file.name);
-		UploadFile(file, GetCurrentFolderData());
+		for(let netFile of netFiles)
+		{
+			let tr = document.createElement("tr")
+			new FileListing({
+				target: fileListingTableBody.appendChild(tr),
+				props: {
+					netFile: netFile,
+					onDelete: () => tr.remove()
+				}
+			});
+		}
 	}
+
+	function UploadFile(event)
+	{
+		let input = document.createElement("input");
+		input.type = "file";
+		input.click();
+		input.addEventListener("change", function(e){
+			let file = e.target.files[0];
+			console.log("chaned", file);
+		});
+		console.log("clicking")
+	}
+
+	onMount(async function(){
+		let session = await LoadSession();
+		if(session === false)		
+			window.location.replace("/login");
+		session.ListFiles().then(ListNetFiles);
+		//let netFiles = 
+		[
+			{
+				fileSizeNum: 10000,
+				metadata: {
+					name: "mistard"
+				}
+			},
+			{
+				fileSizeNum: 1000300000,
+				metadata: {
+					name: "ristard"
+				}
+			}
+		];
+		//ListNetFiles(netFiles);
+	})
 </script>
 <style>
 	#file-browser{
 		width: 100%;
 		color: white;
+	}
+
+	button{
+		font-family: Montserrat;
+		font-size: 14px;
+
+		display: flex;
+		flex-direction: row;
+		justify-content: center;
+		align-items: center;
+
+		color: white;
+		background-color: rgb(30, 30, 30);
+
+		border: none;
+		border-radius: 6px;
+
+		margin: 8px auto 8px 16px;
+		padding: 8px 30px;		
+	}
+
+	@media (max-width: 600px){
+		button{
+			padding: 8px 40dvw;
+		}
+	}
+	
+	button:hover{
+		cursor: pointer;
+		background-color: rgb(35, 35, 35);		
+	}
+
+	button:active{
+		background-color: rgb(40, 40, 40);		
 	}
 
 	:global(#file-browser th){
@@ -100,11 +160,11 @@
 
 <!-- svelte-ignore a11y-no-static-element-interactions (kys svelte)--> 
 <div
-	on:dragover|preventDefault
-	on:drop|preventDefault={OnDrop}
-	
 	style="width: 100%; height: 100%"
 >
+	<button on:click={UploadFile}>
+		Upload
+	</button>
 	<table id="file-browser" border=0 cellspacing=0>
 		<thead>
 			<tr>
@@ -115,7 +175,7 @@
 				</th>
 				<th style="width: 160px">
 					<div>
-						<SortButton name="Upload Date" sort_state={sort_state}/>
+						<SortButton name="" sort_state={sort_state}/>
 					</div>
 				</th>
 				<th style="width: 100px">
@@ -126,8 +186,10 @@
 				<th style="width: 150px"></th>
 			</tr>
 		</thead>
-		<tbody>
-			<tr>
+		<tbody bind:this={fileListingTableBody}>
+			<p style="text-align:center">No files found</p>
+			
+			<!--<tr>
 				<FileListing
 					name="Test File Name"
 					timestamp={Math.floor(Date.now()/1000)}
@@ -140,7 +202,7 @@
 					timestamp={Math.floor(Date.now()/1000)}
 					file_size=12345678
 				/>
-			</tr>
+			</tr>-->
 		</tbody>
 	</table>
 </div>

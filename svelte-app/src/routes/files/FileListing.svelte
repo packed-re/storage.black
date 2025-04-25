@@ -1,7 +1,8 @@
 <script>
-	export let name;
-	export let timestamp;
-	export let file_size;	
+	export let netFile;
+	export let onDelete;
+	//export let timestamp;
+	//export let file_size;	
 
 	import {
 		LogN,
@@ -34,6 +35,26 @@
 		let date = new Date(timestamp * 1000);
 
 		return date.getDate() + "/" + (date.getMonth() + 1) + "/" + date.getFullYear();
+	}
+
+	function DownloadFile()
+	{
+		netFile.DownloadFile().then(function(blob){
+			var a = document.body.appendChild(document.createElement("a"));
+			a.style = "display: none";
+			a.download = netFile.metadata.name;
+
+			objectUrl = window.URL.createObjectURL(blob);			
+			a.href = objectUrl;
+			a.click();
+
+			window.URL.revokeObjectURL(objectUrl);
+		});		
+	}
+
+	function DeleteFile()
+	{
+		netFile.DeleteFile().then(onDelete);
 	}
 </script>
 <style>
@@ -83,7 +104,8 @@
 	}*/
 </style>
 
-<td><div>{name}</div></td>
-<td><div>{FormatUnixTimestamp(timestamp)}</div></td>
-<td><div>{FormatByteCount(file_size)}</div></td>
-<td><div><button>Download</button></div></td>
+<td><div>{netFile.metadata.name}</div></td>
+<!--<td><div>{FormatUnixTimestamp(timestamp)}</div></td>-->
+<td><div>{FormatByteCount(netFile.fileSizeNum)}</div></td>
+<td><div><button on:click={DownloadFile}>Download</button></div></td>
+<td><div><button on:click={DeleteFile}>Delete</button></div></td>

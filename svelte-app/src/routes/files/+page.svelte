@@ -1,6 +1,6 @@
 <script>
 	import FileBrowser from "./FileBrowser.svelte";
-	import {ClearSession} from "$lib/file_api";
+	import { ClearSession, LoadSession } from "$lib/file_api";
 
 	function Logout()
 	{

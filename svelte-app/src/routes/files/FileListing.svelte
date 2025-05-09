@@ -59,10 +59,15 @@
 </script>
 <style>
 	button{
+		display: flex;
+		flex-direction: row;
+		justify-content: center;
+		align-items: center;
+
 		font-family: Montserrat;
 		font-size: 14px;
 		
-		width: 100%;
+		width: 120px;
 		height: 100%;
 
 		border-radius: 6px;
@@ -72,6 +77,11 @@
 		background-color: rgb(20, 20, 20);
 	}
 
+	button > svg{
+		margin-left: -2px;
+		margin-right: 6px;
+	}
+
 	button:hover{
 		cursor: pointer;
 		background-color: rgb(25, 25, 25);
@@ -79,6 +89,17 @@
 
 	button:active{
 		background-color: rgb(40, 40, 40);
+	}
+
+	@media (max-width:600px) {
+		button{
+			font-size: 0px !important;
+			width: 90%;
+		}
+		button > svg{
+			margin: 0;
+			stroke-width: 2;
+		}
 	}
 
 	/*button{
@@ -107,5 +128,19 @@
 <td><div>{netFile.metadata.name}</div></td>
 <!--<td><div>{FormatUnixTimestamp(timestamp)}</div></td>-->
 <td><div>{FormatByteCount(netFile.fileSizeNum)}</div></td>
-<td><div><button on:click={DownloadFile}>Download</button></div></td>
-<td><div><button on:click={DeleteFile}>Delete</button></div></td>
+<td>
+	<div class="download">
+		<button on:click={DownloadFile}>
+			<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-download-icon lucide-download"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" x2="12" y1="15" y2="3"/></svg>
+			Download
+		</button>
+	</div>
+</td>
+<td>
+	<div class="delete">
+		<button on:click={DeleteFile}>
+			<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-trash-icon lucide-trash"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/></svg>
+			Delete
+		</button>
+	</div>
+</td>

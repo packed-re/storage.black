@@ -189,9 +189,10 @@ class FileMetadata
 		if(encodedName.length > 191)
 			throw new Error("File name can be at most 191 bytes, received " + encodedName.length.toString());
 
+		console.log(11,this.folderKey)
 		this.dataBlock = SimpleEncrypt(
-			CryptoJS.lib.WordArray.init([isFolder ? 0x01000000 : 0], 1).concat(this.fileKeySalt).concat(this.fileIv).concat(Uint8ArrayToWordArray(encodedName)), 
-			encryptionKey
+			(new CryptoJS.lib.WordArray.init([this.isFolder ? 0x01000000 : 0], 1)).concat(this.fileKeySalt).concat(this.fileIv).concat(Uint8ArrayToWordArray(encodedName)), 
+			this.folderKey
 		);
 	}
 
@@ -397,7 +398,6 @@ class SessionData
 		this.baseFolderKeySalt = baseFolderKeySalt;
 		this.currentDataId = currentDataId;
 		this.currentFolderKeySalt = currentFolderKeySalt;
-		console.log(this.currentFolderKeySalt)
 		this.currentFolderKey = CryptoJS.HmacSHA256(
 			new CryptoJS.lib.WordArray.init([], 0).concat(this.masterKey).concat(this.currentDataId),
 			this.currentFolderKeySalt
@@ -562,11 +562,13 @@ class SessionData
 
 	UploadFile(file) // MakeFile -> FileUploadRequest. Return NetworkedFile
 	{
+		let _this = this;
 		return new Promise(async function(resolve)
 		{
-			let metadata = FileMetadata.Make(file.name, false, this.folderKey);
+			console.log(_this)
+			let metadata = FileMetadata.Make(file.name, false, _this.currentFolderKey);
 			let fileSize = ArrayBufferToWordArray(BigUint64Array.of(BigInt(file.size)).buffer);
-			let fileId = await MakeFile(this.dataId, metadata.dataBlock, fileSize);
+			let fileId = await MakeFile(_this.dataId, metadata.dataBlock, fileSize);
 			let fileUploader = new FileUploader(fileId, fileSize, metadata.fileKey);
 
 			let fileReader = file.stream().getReader();

@@ -189,4 +189,12 @@
 
 		return null;
 	}
+
+	function GetBinaryRequestDataStream()
+	{
+		if(array_key_exists("data", $_FILES))
+			return fopen($_FILES["data"]["tmp_name"], "c+");
+
+		return null;
+	}
 ?>

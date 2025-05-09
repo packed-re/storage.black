@@ -10,7 +10,8 @@
 	let sort_state = writable({
 		name: "Upload Date",
 		state: null//"DESC"
-	});
+	});	
+	let session;
 
 	let fileListingTableBody;
 
@@ -39,32 +40,36 @@
 		input.click();
 		input.addEventListener("change", function(e){
 			let file = e.target.files[0];
-			console.log("chaned", file);
+			console.log("changed", file);
+			session.UploadFile(file).then(function()
+			{
+				console.log("done");
+			})
 		});
 		console.log("clicking")
 	}
 
 	onMount(async function(){
-		let session = await LoadSession();
+		session = await LoadSession();
 		if(session === false)		
 			window.location.replace("/login");
-		session.ListFiles().then(ListNetFiles);
-		//let netFiles = 
+		//session.ListFiles().then(ListNetFiles);
+		let netFiles = 
 		[
 			{
 				fileSizeNum: 10000,
 				metadata: {
-					name: "mistard"
+					name: "recipes.txt"
 				}
 			},
 			{
-				fileSizeNum: 1000300000,
+				fileSizeNum: 161830000,
 				metadata: {
-					name: "ristard"
+					name: "photos.zip"
 				}
 			}
 		];
-		//ListNetFiles(netFiles);
+		ListNetFiles(netFiles);
 	})
 </script>
 <style>
@@ -95,7 +100,15 @@
 	@media (max-width: 600px){
 		button{
 			padding: 8px 40dvw;
+			margin-left: auto;
+			margin-right: auto;
 		}
+		.button-header{
+			width: 20% !important;
+		}
+	}
+
+	@media (max-width:500px) {
 	}
 	
 	button:hover{
@@ -173,17 +186,18 @@
 						<SortButton name="Name" sort_state={sort_state}/>
 					</div>
 				</th>
-				<th style="width: 160px">
+				<!--<th style="width: 160px">
 					<div>
 						<SortButton name="" sort_state={sort_state}/>
 					</div>
-				</th>
+				</th>-->
 				<th style="width: 100px">
 					<div>
 						<SortButton name="File Size" sort_state={sort_state}/>
 					</div>
 				</th>
-				<th style="width: 150px"></th>
+				<th class="button-header" style="width: 130px"></th>
+				<th class="button-header" style="width: 130px"></th>
 			</tr>
 		</thead>
 		<tbody bind:this={fileListingTableBody}>

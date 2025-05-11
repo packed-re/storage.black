@@ -1,0 +1,8 @@
+DocumentRoot "C:/Users/George/Documents/storage.black/php/public"
+<Directory "C:/Users/George/Documents/storage.black/php/public">
+    Options -Indexes +FollowSymLinks +Includes +ExecCGI
+    AllowOverride All
+    Require all granted
+
+    #ErrorDocument 404 /_error.php
+</Directory>

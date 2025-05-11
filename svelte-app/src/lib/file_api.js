@@ -17,16 +17,23 @@ import {
 	GenerateIV,
 	GenerateEncryptionKey,
 	SimpleEncrypt,
-	SimpleDecrypt
+	SimpleDecrypt,
+	CalculatePaddedCipherLength
 } from "$lib";
 
 const API_BASE = "http://localhost/api/v2/";
 const ENDPOINT_POSTFIX = ".php";
 
-const MAKE_FILE_HEADER_MIN_SIZE = 128 + 8; // dataId + fileSize | + metadata
-const FILE_UPLOAD_HEADER_SIZE = 128 + 8 + 8; // fileId + fileSize + filePointer
-const FILE_DOWNLOAD_HEADER_SIZE = 128 + 8 + 8 + 8; // fileId + fileSize + rangeStart + rangeEnd
+const MAKE_FILE_HEADER_MIN_SIZE = /* 1 + */ 16 + 8; // action + dataId + fileSize | + metadata
+const FILE_UPLOAD_HEADER_SIZE = 1 + 16 + 8 + 8; // action + fileId + fileSize + filePointer
+const FILE_DOWNLOAD_HEADER_SIZE = 1 + 16 + 8 + 8 + 8; // action + fileId + fileSize + rangeStart + rangeEnd
 const FILE_TRANSFER_CHUNK_SIZE = 1_000_000; // 1 MB
+
+const FILE_ACTION = {
+	DOWNLOAD: 2,
+	UPLOAD: 3,
+	DELETE: 4
+}
 
 function SendData(method, endpoint, uploadBlob) // resolves to {status, response} response is uint8array
 {
@@ -131,14 +138,16 @@ function MakeFile(dataId, metadata, fileSize) // resolves to fileId word array
 	return new Promise(function(resolve){
 		let requestHeader = new DataView(new ArrayBuffer(MAKE_FILE_HEADER_MIN_SIZE + metadata.sigBytes));
 		let uploadWordArray = new CryptoJS.lib.WordArray.init([], 0).concat(dataId).concat(fileSize).concat(metadata); // 16 + 8 + >0 <=240
+		
+		//requestHeader.setUint8(FILE_ACTION.make)
 		DataViewWriteUint8Array(requestHeader, 0, WordArrayToUint8Array(uploadWordArray));
 
-		SendData("POST", "makefile", new Blob([requestHeader])).then(function({status, response})
+		SendData("POST", "makefile", new Blob([requestHeader])).then(function({status, data})
 		{
 			if(status === 0)
-				resolve(Uint8ArrayToWordArray(response));
+				resolve(Uint8ArrayToWordArray(data));
 			else
-				throw new Error("makefile request failed - " + new TextDecoder().decode(response))
+				throw new Error("makefile request failed - " + new TextDecoder().decode(data))
 		});
 	});
 }
@@ -185,7 +194,7 @@ class FileMetadata
 
 	GenerateDataBlock()
 	{
-		let encodedName = new TextEncoder().encode(name);
+		let encodedName = new TextEncoder().encode(this.name);
 		if(encodedName.length > 191)
 			throw new Error("File name can be at most 191 bytes, received " + encodedName.length.toString());
 
@@ -205,15 +214,18 @@ class FileMetadata
 
 class FileTransferBase
 {
-	constructor(requestHeader, fileId, fileSize, encryptionKey)
+	constructor(requestHeader, actionType, fileId, fileSize, encryptionKey)
 	{
 		this.requestHeader = requestHeader; // new DataView(new ArrayBuffer(MAKE_FILE_HEADER_MIN_SIZE + metadata.sigBytes));
 		this.fileId = fileId;
 		this.fileSize = fileSize;
+		this.fileSizeNum = Number((new BigUint64Array(WordArrayToUint8Array(this.fileSize).buffer))[0]);
 		this.encryptionKey = encryptionKey;
-
-		DataViewWriteUint8Array(this.requestHeader, 0, this.fileId);
-		this.requestHeader.setBigUint64(16, BigInt(this.fileSize), true);
+		
+		this.requestHeader.setUint8(0, actionType);
+		DataViewWriteUint8Array(this.requestHeader, 1, WordArrayToUint8Array(this.fileId));
+		DataViewWriteUint8Array(this.requestHeader, 17, WordArrayToUint8Array(this.fileSize));
+		//this.requestHeader.setBigUint64(17, BigInt(this.fileSize), true);
 	}
 }
 
@@ -221,7 +233,7 @@ class FileUploader extends FileTransferBase
 {
 	constructor(fileId, fileSize, encryptionKey, encryptionIv)
 	{
-		super(new DataView(new ArrayBuffer(FILE_UPLOAD_HEADER_SIZE)), fileId, fileSize, encryptionKey);
+		super(new DataView(new ArrayBuffer(FILE_UPLOAD_HEADER_SIZE)), FILE_ACTION.UPLOAD, fileId, fileSize, encryptionKey);
 		this.SetFilePointer(0);
 
 		this.encryptor = CryptoJS.algo.AES.createEncryptor(encryptionKey, {
@@ -239,17 +251,33 @@ class FileUploader extends FileTransferBase
 		if(newFilePointer < 0)
 			throw new Error("File pointer can't be negative");
 
-		this.requestHeader.setBigUint64(24 /* 16 + 8 */, BigInt(this.filePointer = newFilePointer));
+		this.requestHeader.setBigUint64(25 /* 1 + 16 + 8 */, BigInt(this.filePointer = newFilePointer));
+	}
+
+	SendRawBlob(blob)
+	{
+		console.log(22, new Uint8Array(this.requestHeader.buffer))
+		return new Promise(function(resolve){
+			SendData("POST", "file", blob).then(function({status, data}){
+				if(status !== 0)
+					throw new Error("Chunk upload request failed - " + new TextDecoder().decode(data));
+				else
+					resolve(true);
+			});
+		});
 	}
 
 	UploadChunk(chunkBuffer)
 	{
+		return this.SendRawBlob(new Blob([this.requestHeader, WordArrayToUint8Array(this.encryptor.process(Uint8ArrayToWordArray(chunkBuffer)))]));
+		let _this = this;
 		return new Promise(function(resolve){
-			let uploadBlob = new Blob([this.requestHeader, this.encryptor.process(Uint8ArrayToWordArray(chunkBuffer))]);
-
-			SendData("POST", "file", uploadBlob).then(function({status, response}){
+			let uploadBlob = new Blob([_this.requestHeader, WordArrayToUint8Array(_this.encryptor.process(Uint8ArrayToWordArray(chunkBuffer)))]);
+			uploadBlob.bytes().then((b)=>console.log(b))
+			console.log("buff", chunkBuffer)
+			SendData("POST", "file", uploadBlob).then(function({status, data}){
 				if(status !== 0)
-					throw new Error("Chunk download request failed - " + new TextDecoder().decode(response));
+					throw new Error("Chunk upload request failed - " + new TextDecoder().decode(data));
 				else
 					resolve(true);
 			});
@@ -258,7 +286,7 @@ class FileUploader extends FileTransferBase
 
 	UploadFinalChunk(chunkBuffer)
 	{
-		return UploadChunk(this.encryptor.process(Uint8ArrayToWordArray(chunkBuffer).concat(this.encryptor.finalize()))); 
+		return this.SendRawBlob(new Blob([this.requestHeader, WordArrayToUint8Array(this.encryptor.process(Uint8ArrayToWordArray(chunkBuffer).concat(this.encryptor.finalize())))])); 
 	}
 }
 
@@ -266,8 +294,8 @@ class FileDownloader extends FileTransferBase
 {
 	constructor(fileId, fileSize, encryptionKey, encryptionIv)
 	{
-		super(new DataView(new ArrayBuffer(FILE_DOWNLOAD_HEADER_SIZE)), fileId, fileSize, encryptionKey);
-		this.SetFileRange(0, Math.min(this.fileSize, FILE_TRANSFER_CHUNK_SIZE));
+		super(new DataView(new ArrayBuffer(FILE_DOWNLOAD_HEADER_SIZE)), FILE_ACTION.DOWNLOAD, fileId, fileSize, encryptionKey);
+		this.SetFileRange(0, Math.min(this.fileSizeNum, FILE_TRANSFER_CHUNK_SIZE));
 
 		this.decryptor = CryptoJS.algo.AES.createDecryptor(encryptionKey, {
 			mode: CryptoJS.mode.CBC,
@@ -287,27 +315,28 @@ class FileDownloader extends FileTransferBase
 		if(from >= to)
 			throw new Error("file range from >= to");
 
-		this.requestHeader.setBigUint64(24 /* 16 + 8 */, BigInt(this.fileDownloadFrom = from));
-		this.requestHeader.setBigUint64(32 /* 16 + 16*/, BigInt(this.fileDownloadTo = to));
+		this.requestHeader.setBigUint64(25 /* 1 + 16 + 8 */, BigInt(this.fileDownloadFrom = from));
+		this.requestHeader.setBigUint64(33 /* 1 + 16 + 16*/, BigInt(this.fileDownloadTo = to));
 	}
 
 	SetFileRangeNextChunk()
 	{
-		if(this.fileDownloadTo === this.fileSize)
+		if(this.fileDownloadTo === this.fileSizeNum)
 			return false;
 
-		this.SetFileRange(this.fileDownloadTo, Math.min(this.fileDownloadTo + FILE_TRANSFER_CHUNK_SIZE, this.fileSize));
+		this.SetFileRange(this.fileDownloadTo, Math.min(this.fileDownloadTo + FILE_TRANSFER_CHUNK_SIZE, this.fileSizeNum));
 		return true;
 	}
 
 	DownloadChunk()
 	{
+		let _this = this;
 		return new Promise(function(resolve){
-			SendData("GET", "file", new Blob([this.requestHeader])).then(function({status, response}){
+			SendData("POST", "file", new Blob([_this.requestHeader])).then(function({status, data}){
 				if(status === 0)
-					resolve(WordArrayToUint8Array(this.decryptor.process(Uint8ArrayToWordArray(response))));
+					resolve(WordArrayToUint8Array(_this.decryptor.process(Uint8ArrayToWordArray(data))));
 				else
-					throw new Error("Chunk download request failed - " + new TextDecoder().decode(response));
+					throw new Error("Chunk download request failed - " + new TextDecoder().decode(data));
 			});
 		})
 	}
@@ -321,12 +350,12 @@ class FileDownloader extends FileTransferBase
 
 class NetworkedFile
 {
-	constructor(folderKey, fileId, fileSize, metadata) // everything except metadata is expected to be a word array
+	constructor(fileId, fileSize, metadata) // everything except metadata is expected to be a word array
 	{
 		this.fileId = fileId;
 		this.fileSize = fileSize;
 		this.fileSizeNum = Number((new BigUint64Array(WordArrayToUint8Array(this.fileSize).buffer))[0]);
-		this.metadata = FileMetadata.FromDataBlock(metadata, folderKey);		
+		this.metadata = metadata//FileMetadata.FromDataBlock(metadata, folderKey);		
 
 		if(this.fileSizeNum > Number.MAX_SAFE_INTEGER)
 			throw new Error("NetworkFile currently doesn't support a fileSize larger than Number.MAX_SAFE_INTEGER");
@@ -339,9 +368,10 @@ class NetworkedFile
 		if(this._deleted)
 			throw new Error("Attempted to download deleted file");
 
+		let _this = this;
 		return new Promise(function(resolve)
 		{
-			let fileDownloader = new FileDownloader(this.fileId, this.fileSize, this.metadata.fileKey, this.metadata.fileIv);
+			let fileDownloader = new FileDownloader(_this.fileId, _this.fileSize, _this.metadata.fileKey, _this.metadata.fileIv);
 			let finalBlob = new Blob();
 			fileDownloader.DownloadChunk().then(function processChunk(downloadedBuffer){
 				finalBlob = new Blob([finalBlob, downloadedBuffer]);
@@ -360,12 +390,13 @@ class NetworkedFile
 
 	Delete() // void, throw on failure
 	{
+		let _this = this;
 		return new Promise(function(resolve){
-			SendData("DELETE", "file", new Blob([WordArrayToUint8Array(this.fileId)])).then(function({status}){
+			SendData("POST", "file", new Blob([Uint8Array.of(FILE_ACTION.DELETE), WordArrayToUint8Array(_this.fileId)])).then(function({status, data}){
 				if(status === 0)
-					resolve(this._deleted = true);
+					resolve(_this._deleted = true);
 				else
-					throw new Error(`Failed to delete file ${metadata.name} (${this.fileId.toString(CryptoJS.enc.Hex)})`);
+					throw new Error(`Failed to delete file ${_this.metadata.name} (${_this.fileId.toString(CryptoJS.enc.Hex)}) - ${new TextDecoder().decode(data)}`);
 			})
 		})		
 	}
@@ -529,14 +560,14 @@ class SessionData
 			let response = await SendData("POST", "files", new Blob([WordArrayToUint8Array(_this.currentDataId)]));
 			console.log("pp", response);
 			if(response.status !== 0)
-				throw new Error("failed to list files");
+				throw new Error("failed to get file list - " + new TextDecoder().decode(response.data));
 
 			let listBuffer = Uint8ArrayToWordArray(response.data);
 
 			let outputFiles = [];
 
 			let fileObjBase = 0;
-			while (fileObjBase < listBuffer.length)
+			while (fileObjBase < listBuffer.sigBytes)
 			{
 				let fileId = SliceWordArray(listBuffer, fileObjBase, fileObjBase + 16); // 16 bytes
 				let fileSize = SliceWordArray(listBuffer, fileObjBase + 16, fileObjBase + 24); // 8 bytes
@@ -545,18 +576,18 @@ class SessionData
 				if(metadataLen === 0)
 					throw new Error(`metadata length byte is null. Object base - ${fileObjBase}`);
 
-				if((fileObjBase + metadataLen) > listBuffer.length)
+				if((fileObjBase + metadataLen) > listBuffer.sigBytes)
 					throw new Error(`metadata length byte points outside the bounds of the list buffer. Object base - ${fileObjBase} | Object length - ${fileLen}`);
 
 				if(metadataLen > 240)
 					throw new Error(`metadata is too long (>240). Object base - ${fileObjBase} | Object length - ${metadataLen}`);
 				
 				let metadata = SliceWordArray(listBuffer, fileObjBase + 25, fileObjBase + 25 + metadataLen);
-				outputFiles.push(new NetworkedFile(_this.currentFolderKey, fileId, fileSize, FileMetadata.FromDataBlock(metadata)));
+				outputFiles.push(new NetworkedFile(fileId, fileSize, FileMetadata.FromDataBlock(metadata, _this.currentFolderKey)));
 				fileObjBase += 25 + metadataLen;
 			}
 
-			return outputFiles;
+			resolve(outputFiles);
 		})
 	}
 
@@ -565,25 +596,26 @@ class SessionData
 		let _this = this;
 		return new Promise(async function(resolve)
 		{
-			console.log(_this)
 			let metadata = FileMetadata.Make(file.name, false, _this.currentFolderKey);
-			let fileSize = ArrayBufferToWordArray(BigUint64Array.of(BigInt(file.size)).buffer);
-			let fileId = await MakeFile(_this.dataId, metadata.dataBlock, fileSize);
-			let fileUploader = new FileUploader(fileId, fileSize, metadata.fileKey);
+			let fileSize = ArrayBufferToWordArray(BigUint64Array.of(BigInt(CalculatePaddedCipherLength(file.size))).buffer);
+			let fileId = await MakeFile(_this.currentDataId, metadata.dataBlock, fileSize);
+			let fileUploader = new FileUploader(fileId, fileSize, metadata.fileKey, metadata.fileIv);
 
 			let fileReader = file.stream().getReader();
 			let fileChunk = new Uint8Array(0);//new Blob();
+
 			fileReader.read().then(async function processChunk({done, value})
 			{
+				console.log("reading chunk")
 				if(done)
 				{
-					let finalChunk;
-					if(fileChunk.length !== 0)
-						finalChunk = fileChunk
-					else
-						finalChunk = new Uint8Array(0);
+					//let finalChunk;
+					//if(fileChunk.length !== 0)
+					//	finalChunk = fileChunk
+					//else
+					//	finalChunk = new Uint8Array(0);
 					
-					return fileUploader.UploadFinalChunk(finalChunk).then(resolve);
+					return fileUploader.UploadFinalChunk(fileChunk).then(resolve);
 				}
 				
 				let oldFileChunk = fileChunk;

@@ -39,7 +39,7 @@
 
 	function DownloadFile()
 	{
-		netFile.DownloadFile().then(function(blob){
+		netFile.Download().then(function(blob){
 			var a = document.body.appendChild(document.createElement("a"));
 			a.style = "display: none";
 			a.download = netFile.metadata.name;
@@ -54,7 +54,7 @@
 
 	function DeleteFile()
 	{
-		netFile.DeleteFile().then(onDelete);
+		netFile.Delete().then(onDelete);
 	}
 </script>
 <style>

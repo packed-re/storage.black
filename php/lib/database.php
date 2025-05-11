@@ -51,7 +51,7 @@
 			
 			$stmt = $this->DB->prepare("
 				INSERT INTO files (account_id, data_id, file_id, file_data, file_size, finished_writing)
-					SELECT id, ?, ?, ?, 0 FROM accounts
+					SELECT id, ?, ?, ?, ?, 0 FROM accounts
 						WHERE account_hash = ?;
 			");
 
@@ -60,11 +60,9 @@
 
 			$fileId = hash_hmac("sha256", $data_id . $file_data . random_bytes(32) . $account_hash, $_fileSecret, true);
 			$fileId = ByteSubString($fileId, 0, 16) ^ ByteSubString($fileId, 16, 16);
-
+			//ExitResponse(ResponseType::ServerError, "---" . implode("\n---", [$data_id, $fileId, $file_data, $file_size, $account_hash]));
 			$stmt->bind_param("sssis", $data_id, $fileId, $file_data, $file_size, $account_hash);
 			$stmt->execute();
-
-			return $this->DB->affected_rows === 1;
 
 			if($this->DB->affected_rows === 0) // if no account exists with given account hash
 			{
@@ -78,7 +76,7 @@
 				return $fileId;
 		}
 
-		protected function UnregisterFile($account_hash, $fileId)
+		public function UnregisterFile($account_hash, $fileId)
 		{
 			$stmt = $this->DB->prepare("
 				DELETE FROM files
@@ -131,7 +129,7 @@
 		public function GetFileSize($fileId)
 		{
 			$stmt = $this->DB->prepare("
-				SELECT files.file_size FROM files files.file_id = ?
+				SELECT files.file_size FROM files WHERE files.file_id = ?
 			");
 
 			$stmt->bind_param("s", $fileId);

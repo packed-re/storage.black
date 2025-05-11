@@ -178,7 +178,7 @@ function ChopWordArray(wa, start, end) // same as above but does the slicing on 
 		let firstWordShift = wordOffset * 8;
 		let secondWordShift = (4-wordOffset) * 8;
 
-		for(let i = 0; i < startWord; ++startWord)
+		for(let i = 0; i < startWord; ++i)
 			wa.shift();
 			
 		let endWord = (end - start) >>> 2; // (after shift)
@@ -364,9 +364,9 @@ function GenerateEncryptionKey()
 	return CryptoJS.lib.WordArray.random(32);
 }
 
-const CipherPadSize = 16;
-const CipherHeaderSize = 8 + 32 + CipherPadSize;
-const CipherHeaderSizeWithIV = CipherHeaderSize + 16;
+const CIPHER_PAD_SIZE = 16;
+const CIPHER_HEADER_SIZE = 8 + 32 + CIPHER_PAD_SIZE;
+const CIPHER_HEADER_SIZE_WITH_IV = CIPHER_HEADER_SIZE + 16;
 
 // key needs to be of proper length otherwise SerializableCipher will break!!!! 
 function ShortEncrypt(data, key, iv, padding = CryptoJS.pad.Pkcs7) // key is a WordArrays. data should be able to be both a WordArray and a string
@@ -452,6 +452,15 @@ function SimpleDecrypt(data, key, padding = CryptoJS.pad.Pkcs7)
 	);
 }
 
+function CalculatePaddedCipherLength(plaintextLen)
+{
+	let remainder = plaintextLen % CIPHER_PAD_SIZE;
+	if(remainder === 0)
+		return plaintextLen + CIPHER_PAD_SIZE;
+	else
+		return plaintextLen + (CIPHER_PAD_SIZE - remainder);
+}
+
 export {
 	SetCookie,
 	GetCookie,
@@ -474,13 +483,14 @@ export {
 	GenerateUniqueDataID,
 	GenerateIV,
 	GenerateEncryptionKey,
-	CipherPadSize,
-	CipherHeaderSize,
-	CipherHeaderSizeWithIV,
+	CIPHER_PAD_SIZE,
+	CIPHER_HEADER_SIZE,
+	CIPHER_HEADER_SIZE_WITH_IV,
 	ShortEncrypt,
 	ShortDecrypt,
 	CombineCipherIV,
 	ChopCipherIV,
 	SimpleEncrypt,
-	SimpleDecrypt
+	SimpleDecrypt,
+	CalculatePaddedCipherLength
 };

@@ -6,7 +6,7 @@
 	RouteSetup();
 
 	$session = HandleSession();
-	if($_SERVER["REQUEST_METHOD"] !== "GET")
+	if($_SERVER["REQUEST_METHOD"] !== "POST")
 		ExitResponse(ResponseType::BadRequestMethod);
 
 	$data = ReadBinaryRequestData();
@@ -23,8 +23,8 @@
 	$fileCount = count($files);
 	
 	$output = "";
-	for($i = 0; $i < $files; ++$i)
-		$output += pack(
+	for($i = 0; $i < $fileCount; ++$i)
+		$output .= pack(
 			"a16PCa*",
 			$files[$i]["file_id"],
 			$files[$i]["file_size"],

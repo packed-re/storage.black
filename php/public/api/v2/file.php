@@ -30,7 +30,7 @@
 		if($writeEnd > $fileSize)
 			ExitResponse(
 				ResponseType::BadArgument,
-				"Attempted to write outside the bounds of the file"
+				"Attempted to write outside the bounds of the file - " . implode(",", [$from, $dataStat["size"], ftell($dataStream), $writeEnd])
 			);
 
 		$fileOnDisk = GetManagedFileName($session->account_id, $fileId, $fileSizeBuff);
@@ -70,13 +70,17 @@
 	$dataStat = fstat($dataStream);
 
 	if($dataStat["size"] < 1)
-		ExitResponse(ResponseType::BadArgument, "provided data too short");
+		ExitResponse(ResponseType::BadArgument, "Provided data too short");
 
 	$action = fread($dataStream, 1);
 
 	switch($action)
 	{
-		case "\x01": // Download
+		//case "\x00":
+
+		//case "\x01": // MakeFile
+
+		case "\x02": // Download
 			if($dataStat["size"] !== 41) // action 1 + fileID 16 + fileSize 8 + from 8 + to 8
 				ExitResponse(
 					ResponseType::BadArgument,
@@ -92,7 +96,7 @@
 				$dataUnpacked["to"]
 			);
 
-		case "\x02": // Upload
+		case "\x03": // Upload			
 			if($dataStat["size"] < 33) // action 1 + fileID 16 + fileSize 8 + from 8
 				ExitResponse(
 					ResponseType::BadArgument,
@@ -108,13 +112,16 @@
 				$dataStream, $dataStat
 			);
 
-		case "\x03": // Delete
-			if($dataStat["size"] !== 9)
+		case "\x04": // Delete
+			if($dataStat["size"] !== 17)
 				ExitResponse(
 					ResponseType::BadArgument,
-					"Provided data is of improper length"
+					"Provided data is of improper length a " . json_encode($dataStat)
 				);
 
-			return DeleteFile(fread($dataStream, 8));
+			return DeleteFile(fread($dataStream, 16));
+		
+		default:
+			ExitResponse(ResponseType::BadArgument, "Bad action byte");
 	}
 ?>

@@ -20,17 +20,20 @@
 		while(fileListingTableBody.firstChild)
 			fileListingTableBody.removeChild(fileListingTableBody.firstChild);
 
-		for(let netFile of netFiles)
-		{
-			let tr = document.createElement("tr")
-			new FileListing({
-				target: fileListingTableBody.appendChild(tr),
-				props: {
-					netFile: netFile,
-					onDelete: () => tr.remove()
-				}
-			});
-		}
+		if(netFiles.length === 0)
+			fileListingTableBody.appendChild(document.createElement("p")).innerHTML = `<p style="text-align:center">No files found</p>`;
+		else
+			for(let netFile of netFiles)
+			{
+				let tr = document.createElement("tr")
+				new FileListing({
+					target: fileListingTableBody.appendChild(tr),
+					props: {
+						netFile: netFile,
+						onDelete: () => tr.remove()
+					}
+				});
+			}
 	}
 
 	function UploadFile(event)
@@ -44,6 +47,7 @@
 			session.UploadFile(file).then(function()
 			{
 				console.log("done");
+				session.ListFiles().then(ListNetFiles);
 			})
 		});
 		console.log("clicking")
@@ -53,8 +57,8 @@
 		session = await LoadSession();
 		if(session === false)		
 			window.location.replace("/login");
-		//session.ListFiles().then(ListNetFiles);
-		let netFiles = 
+		session.ListFiles().then(ListNetFiles);
+		/*let netFiles = 
 		[
 			{
 				fileSizeNum: 10000,
@@ -69,7 +73,7 @@
 				}
 			}
 		];
-		ListNetFiles(netFiles);
+		ListNetFiles(netFiles);*/
 	})
 </script>
 <style>

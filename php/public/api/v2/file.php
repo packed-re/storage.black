@@ -11,13 +11,13 @@
 	{
 		global $session;
 
-		if($from < 0 | $to > $fileSize)
+		if($from < 0 | $to > $fileSize | $from > $to)
 			ExitResponse(ResponseType::BadArgument, "Bad file range");
 
 		$fileOnDisk = GetManagedFileName($session->account_id, $fileId, $fileSizeBuff);
 		if(!file_exists($fileOnDisk))
 			ExitResponse(ResponseType::BadArgument, "File not found");
-
+		
 		ExitResponse(ResponseType::Success, file_get_contents($fileOnDisk, false, null, $from, $to-$from));
 	}
 

@@ -1,7 +1,7 @@
 <script>
 
 	import { onMount } from "svelte";
-	import StatusBox from "../StatusBox.svelte";
+	import StatusBox from "./StatusBox.svelte";
 
 	import {
 		CryptoJS,
@@ -15,18 +15,12 @@
 	} from "$lib";
 
 	import {
-		CreateSession,
-		CheckSession,
-		FetchSessionEncryptionKey,
-		ClearSession
-	} from "$lib/session";
-
-	import {
-		Login
+		Login,
+		LoadSession
 	} from "$lib/file_api";
 
-	onMount(function(){
-		if(CheckSession())			
+	onMount(async function(){
+		if(await LoadSession())			
 			window.location.replace("/files");
 	});
 	
@@ -168,7 +162,7 @@
 	}
 </style>
 
-<StatusBox {...status_box_data}/>
+<StatusBox open="false"{...status_box_data}/>
 
 <div id="login-window">
 	<p>storage.black</p>

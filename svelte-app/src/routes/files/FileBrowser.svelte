@@ -57,6 +57,7 @@
 		session = await LoadSession();
 		if(session === false)		
 			window.location.replace("/");
+		
 		session.ListFiles().then(ListNetFiles);
 		/*let netFiles = 
 		[

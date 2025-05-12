@@ -5,7 +5,7 @@
 	function Logout()
 	{
 		ClearSession().then(function(){
-			window.location.replace("/login");
+			window.location.replace("/");
 		})
 	}
 </script>

@@ -27,7 +27,7 @@ const ENDPOINT_POSTFIX = ".php";
 const MAKE_FILE_HEADER_MIN_SIZE = /* 1 + */ 16 + 8; // action + dataId + fileSize | + metadata
 const FILE_UPLOAD_HEADER_SIZE = 1 + 16 + 8 + 8; // action + fileId + fileSize + filePointer
 const FILE_DOWNLOAD_HEADER_SIZE = 1 + 16 + 8 + 8 + 8; // action + fileId + fileSize + rangeStart + rangeEnd
-const FILE_TRANSFER_CHUNK_SIZE = 1_000_000; // 1 MB
+const FILE_TRANSFER_CHUNK_SIZE = 20_000_000; // 20 MB
 
 const FILE_ACTION = {
 	DOWNLOAD: 2,
@@ -251,12 +251,11 @@ class FileUploader extends FileTransferBase
 		if(newFilePointer < 0)
 			throw new Error("File pointer can't be negative");
 
-		this.requestHeader.setBigUint64(25 /* 1 + 16 + 8 */, BigInt(this.filePointer = newFilePointer));
+		this.requestHeader.setBigUint64(25 /* 1 + 16 + 8 */, BigInt(this.filePointer = newFilePointer), true);
 	}
 
 	SendRawBlob(blob)
 	{
-		console.log(22, new Uint8Array(this.requestHeader.buffer))
 		return new Promise(function(resolve){
 			SendData("POST", "file", blob).then(function({status, data}){
 				if(status !== 0)
@@ -269,24 +268,26 @@ class FileUploader extends FileTransferBase
 
 	UploadChunk(chunkBuffer)
 	{
-		return this.SendRawBlob(new Blob([this.requestHeader, WordArrayToUint8Array(this.encryptor.process(Uint8ArrayToWordArray(chunkBuffer)))]));
-		let _this = this;
-		return new Promise(function(resolve){
-			let uploadBlob = new Blob([_this.requestHeader, WordArrayToUint8Array(_this.encryptor.process(Uint8ArrayToWordArray(chunkBuffer)))]);
-			uploadBlob.bytes().then((b)=>console.log(b))
-			console.log("buff", chunkBuffer)
-			SendData("POST", "file", uploadBlob).then(function({status, data}){
-				if(status !== 0)
-					throw new Error("Chunk upload request failed - " + new TextDecoder().decode(data));
-				else
-					resolve(true);
-			});
-		});
+		return this.SendRawBlob(
+			new Blob(
+				[
+					this.requestHeader,
+					WordArrayToUint8Array(this.encryptor.process(Uint8ArrayToWordArray(chunkBuffer)))
+				]
+			)
+		);
 	}
 
 	UploadFinalChunk(chunkBuffer)
 	{
-		return this.SendRawBlob(new Blob([this.requestHeader, WordArrayToUint8Array(this.encryptor.process(Uint8ArrayToWordArray(chunkBuffer).concat(this.encryptor.finalize())))])); 
+		return this.SendRawBlob(
+			new Blob(
+				[
+					this.requestHeader,
+					WordArrayToUint8Array(this.encryptor.process(Uint8ArrayToWordArray(chunkBuffer)).concat(this.encryptor.finalize()))
+				]
+			)
+		); 
 	}
 }
 
@@ -305,7 +306,7 @@ class FileDownloader extends FileTransferBase
 	}
 
 	SetFileRange(from, to)
-	{		
+	{
 		if(from > Number.MAX_SAFE_INTEGER || to > Number.MAX_SAFE_INTEGER)
 			throw new RangeError("file range values higher than Number.MAX_SAFE_INTEGER are currently unsupported");
 
@@ -315,8 +316,8 @@ class FileDownloader extends FileTransferBase
 		if(from >= to)
 			throw new Error("file range from >= to");
 
-		this.requestHeader.setBigUint64(25 /* 1 + 16 + 8 */, BigInt(this.fileDownloadFrom = from));
-		this.requestHeader.setBigUint64(33 /* 1 + 16 + 16*/, BigInt(this.fileDownloadTo = to));
+		this.requestHeader.setBigUint64(25 /* 1 + 16 + 8 */, BigInt(this.fileDownloadFrom = from), true);
+		this.requestHeader.setBigUint64(33 /* 1 + 16 + 16*/, BigInt(this.fileDownloadTo = to), true);
 	}
 
 	SetFileRangeNextChunk()
@@ -343,7 +344,8 @@ class FileDownloader extends FileTransferBase
 
 	FinalizeDownload()
 	{
-		return WordArrayToUint8Array(this.decryptor.finalize());
+		let data = this.decryptor.finalize();
+		return WordArrayToUint8Array(data);
 	}
 }
 
@@ -586,7 +588,7 @@ class SessionData
 				outputFiles.push(new NetworkedFile(fileId, fileSize, FileMetadata.FromDataBlock(metadata, _this.currentFolderKey)));
 				fileObjBase += 25 + metadataLen;
 			}
-
+			console.log(listBuffer.sigBytes, outputFiles)
 			resolve(outputFiles);
 		})
 	}
@@ -606,7 +608,6 @@ class SessionData
 
 			fileReader.read().then(async function processChunk({done, value})
 			{
-				console.log("reading chunk")
 				if(done)
 				{
 					//let finalChunk;
@@ -624,10 +625,10 @@ class SessionData
 				fileChunk.set(value, oldFileChunk.length);
 				oldFileChunk = undefined;
 
-				if(fileChunk.size >= FILE_TRANSFER_CHUNK_SIZE)
+				if(fileChunk.byteLength >= FILE_TRANSFER_CHUNK_SIZE)
 				{
 					await fileUploader.UploadChunk(fileChunk);
-					fileUploader.SetFilePointer(fileUploader.filePointer + fileChunk.size);
+					fileUploader.SetFilePointer(fileUploader.filePointer + fileChunk.byteLength);
 					fileChunk = new Uint8Array(0);
 				}
 

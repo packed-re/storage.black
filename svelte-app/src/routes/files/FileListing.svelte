@@ -44,7 +44,7 @@
 			a.style = "display: none";
 			a.download = netFile.metadata.name;
 
-			objectUrl = window.URL.createObjectURL(blob);			
+			let objectUrl = window.URL.createObjectURL(blob);			
 			a.href = objectUrl;
 			a.click();
 

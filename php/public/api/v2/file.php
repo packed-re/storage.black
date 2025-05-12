@@ -12,12 +12,13 @@
 		global $session;
 
 		if($from < 0 | $to > $fileSize | $from > $to)
-			ExitResponse(ResponseType::BadArgument, "Bad file range");
+			ExitResponse(ResponseType::BadArgument, "Bad file range " . implode(" | ", [$from, $to]));
 
 		$fileOnDisk = GetManagedFileName($session->account_id, $fileId, $fileSizeBuff);
 		if(!file_exists($fileOnDisk))
 			ExitResponse(ResponseType::BadArgument, "File not found");
-		
+		header("from: " . $from);
+		header("to: " . $to);
 		ExitResponse(ResponseType::Success, file_get_contents($fileOnDisk, false, null, $from, $to-$from));
 	}
 
@@ -25,7 +26,8 @@
 	{
 		global $session;
 
-		$writeEnd = $from + ($dataStat["size"] - ftell($dataStream));
+		$uploadedByteCount = $dataStat["size"] - ftell($dataStream);
+		$writeEnd = $from + $uploadedByteCount;
 
 		if($writeEnd > $fileSize)
 			ExitResponse(
@@ -36,11 +38,18 @@
 		$fileOnDisk = GetManagedFileName($session->account_id, $fileId, $fileSizeBuff);
 		if(!file_exists($fileOnDisk))
 			ExitResponse(ResponseType::BadArgument, "File not found");
+		
+		$targetFileStream = fopen($fileOnDisk, "c+");
+		fseek($targetFileStream, $from);
+		fwrite($targetFileStream, fread($dataStream, $uploadedByteCount));
+		//stream_copy_to_stream($dataStream, $targetFileStream, ftell($dataStream));
+		fclose($targetFileStream);
 
-		file_put_contents($fileOnDisk, $dataStream, $from);
 		if($writeEnd == $fileSize)
 			(new Database())->FinishFileUpload($session->account_id, $fileId);
-
+		
+		header("from: " . $from);
+		header("writeEnd: " . $writeEnd);
 		ExitResponse(ResponseType::Success);
 	}
 

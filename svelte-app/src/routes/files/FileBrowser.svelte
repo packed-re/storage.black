@@ -56,7 +56,7 @@
 	onMount(async function(){
 		session = await LoadSession();
 		if(session === false)		
-			window.location.replace("/login");
+			window.location.replace("/");
 		session.ListFiles().then(ListNetFiles);
 		/*let netFiles = 
 		[

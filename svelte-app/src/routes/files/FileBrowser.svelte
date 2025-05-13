@@ -6,11 +6,19 @@
 
 	import SortButton from "./SortButton.svelte";
 	import FileListing from "./FileListing.svelte";
+	import StatusBox from "../StatusBox.svelte";
 
 	let sort_state = writable({
 		name: "Upload Date",
 		state: null//"DESC"
 	});	
+
+	let statusBoxData = {
+		open: false,
+		state: "loading",
+		text: "Uploading Data..."
+	}
+
 	let session;
 
 	let fileListingTableBody;
@@ -44,9 +52,16 @@
 		input.addEventListener("change", function(e){
 			let file = e.target.files[0];
 			console.log("changed", file);
+			statusBoxData.open = true;
+			statusBoxData.state = "loading";
+			statusBoxData.text = "Uploading Data...";
 			session.UploadFile(file).then(function()
 			{
 				console.log("done");
+				statusBoxData.state = "finished";
+				statusBoxData.text = "File Finished Uploading!"
+				setTimeout(() => statusBoxData.open = false, 500);
+
 				session.ListFiles().then(ListNetFiles);
 			})
 		});
@@ -56,7 +71,7 @@
 	onMount(async function(){
 		session = await LoadSession();
 		if(session === false)		
-			window.location.replace("/");
+			return window.location.replace("/");
 		
 		session.ListFiles().then(ListNetFiles);
 		/*let netFiles = 
@@ -176,7 +191,8 @@
 	}
 </style>
 
-<!-- svelte-ignore a11y-no-static-element-interactions (kys svelte)--> 
+<StatusBox {...statusBoxData}/>
+<!-- svelte-ignore a11y-no-static-element-interactions --> 
 <div
 	style="width: 100%; height: 100%"
 >

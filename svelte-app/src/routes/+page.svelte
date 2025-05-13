@@ -162,7 +162,7 @@
 	}
 </style>
 
-<StatusBox open="false"{...status_box_data}/>
+<StatusBox {...status_box_data}/>
 
 <div id="login-window">
 	<p>storage.black</p>

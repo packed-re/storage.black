@@ -86,6 +86,7 @@ function LoadSession() // returns bool based on if one is active. if it is it ca
 		let innerKeyB64 = GetCookie("innerKey");
 		if(innerKeyB64 === null)
 		{
+			console.log("innerKey missing");
 			await ClearSession();
 			return resolve(false);
 		}
@@ -93,6 +94,7 @@ function LoadSession() // returns bool based on if one is active. if it is it ca
 		let outterKeyB64 = localStorage.getItem("outterKey");
 		if(outterKeyB64 === null)
 		{
+			console.log("outterKey missing");
 			await ClearSession();
 			return resolve(false);
 		}
@@ -100,6 +102,7 @@ function LoadSession() // returns bool based on if one is active. if it is it ca
 		let sessionDataB64 = localStorage.getItem("sessionData");
 		if(sessionDataB64 === null)
 		{
+			console.log("sessionData missing");
 			await ClearSession();
 			return resolve(false);
 		}
@@ -109,6 +112,7 @@ function LoadSession() // returns bool based on if one is active. if it is it ca
 		let response = await SendData("GET", "session");
 		if(response.status !== 0)
 		{
+			console.log("failed to retrieve session key");
 			await ClearSession();
 			return resolve(false);
 		}
@@ -150,16 +154,6 @@ function MakeFile(dataId, metadata, fileSize) // resolves to fileId word array
 				throw new Error("makefile request failed - " + new TextDecoder().decode(data))
 		});
 	});
-}
-
-function MakeMetadata(encryptionKey, name, isFolder)
-{
-	let encodedName = new TextEncoder().encode(name);
-	if(encodedName.length > 191)
-		throw new Error("File name can be at most 191 bytes, received " + encodedName.length.toString());
-
-	let metadata = CryptoJS.lib.WordArray.init([isFolder ? 0x01000000 : 0], 1).concat(CryptoJS.lib.WordArray.random(16)).concat(Uint8ArrayToWordArray(encodedName));
-	return SimpleEncrypt(metadata, encryptionKey);
 }
 
 class FileMetadata

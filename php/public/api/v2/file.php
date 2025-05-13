@@ -63,10 +63,9 @@
 			ExitResponse(ResponseType::BadArgument, "File not found");
 
 		$fileOnDisk = GetManagedFileName($session->account_id, $fileId, pack("P", $fileSize));
-		if(!file_exists($fileOnDisk))
-			ExitResponse(ResponseType::BadArgument, "File not found");
+		if(file_exists($fileOnDisk))
+			unlink($fileOnDisk);//ExitResponse(ResponseType::BadArgument, "File not found");
 
-		unlink($fileOnDisk);
 		$db->UnregisterFile($session->account_id, $fileId);
 
 		ExitResponse(ResponseType::Success);
